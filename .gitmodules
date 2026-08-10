@@ -1,0 +1,6 @@
+[submodule "frontend_library"]
+	path = frontend_library
+	url = https://github.com/trongdoan888/frontend_library
+[submodule "backend_library"]
+	path = backend_library
+	url = https://github.com/trongdoan888/backend_library
