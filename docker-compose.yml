@@ -10,6 +10,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "5432:5432"
+    restart: always
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -43,6 +44,7 @@ services:
       POSTGRES_HOST: db
     ports:
       - "8000:8000"
+    restart: always
     depends_on:
       db:
         condition: service_healthy
@@ -56,6 +58,7 @@ services:
       - "3000:3000"
     depends_on:
       - backend
+    restart: always
 
 volumes:
   postgres_data:
