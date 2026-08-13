@@ -224,3 +224,62 @@ docker compose logs -f frontend
 
 # Kiểm tra job scan có phát hiện lỗ hổng không: xem tab Actions → job gitleaks/trivy-fs/trivy-image
 ```
+
+---
+
+## Phần 3: Hướng dẫn tạo tài khoản admin
+
+Model user của dự án là **custom user model** (`api.User`, xem [models.py](backend_library/backend_library/api/models.py)), có field `role` (`admin` / `user` / `libby`). Tài khoản admin là user có `role="admin"` và `is_superuser=True`, dùng để đăng nhập vào app (frontend gọi API JWT) với quyền quản trị.
+
+> ⚠️ **Không tạo tài khoản admin bằng cách insert thẳng dữ liệu qua pgAdmin.** Password trong bảng `api_user` được lưu dạng hash (qua `set_password()` của Django), pgAdmin không tự hash được — insert tay sẽ ra tài khoản không đăng nhập được, và cũng dễ set sai/thiếu field `role`, `is_superuser`. Luôn tạo bằng lệnh Django `createsuperuser`, chạy đúng ngay trong container `backend` — vì `CustomUserManager.create_superuser` (xem [models.py:37-41](backend_library/backend_library/api/models.py#L37-L41)) tự động set `is_superuser=True` và `role="admin"` giúp bạn.
+
+Lệnh sẽ hỏi lần lượt: `Username`, `Email address`, `Password` (`USERNAME_FIELD = "username"`, `REQUIRED_FIELDS = ["email"]`).
+
+### 1. Trường hợp dùng terminal VSCode (chạy local bằng Docker Compose)
+
+Áp dụng khi bạn đang chạy hệ thống trên máy dev bằng `docker compose up` (xem [Phần 1](#phần-1-hướng-dẫn-triển-khai-dự-án)). Mở terminal VSCode ngay tại thư mục gốc `library-app`:
+
+```bash
+docker compose exec backend python manage.py createsuperuser
+```
+
+Làm theo prompt để nhập `Username`, `Email`, `Password`.
+
+Nếu container backend chưa chạy (`docker compose ps` không thấy `library_backend`), khởi động trước:
+
+```bash
+docker compose up -d backend
+```
+
+**Nếu không chạy qua Docker** (chạy backend trực tiếp bằng venv như mục 7 ở Phần 1), mở terminal VSCode tại `backend_library/backend_library` (thư mục chứa `manage.py`), kích hoạt venv rồi chạy thẳng:
+
+```bash
+cd backend_library/backend_library
+..\.venv\Scripts\activate     # Windows
+python manage.py createsuperuser
+```
+
+### 2. Trường hợp dùng máy ảo (Linux server)
+
+Áp dụng cho server production/staging — chính là VM đã cấu hình self-hosted runner ở [Phần 2](#3-chuẩn-bị-self-hosted-runner-làm-1-lần-trên-server), nơi hệ thống chạy bằng Docker Compose với `DEPLOY_PATH` mặc định `/home/trong/library-app`.
+
+1. SSH vào server:
+   ```bash
+   ssh <user>@<ip-server>
+   ```
+2. Vào đúng thư mục deploy và chạy `createsuperuser` **bên trong container** `backend` (không chạy Python trực tiếp trên host vì server không nhất thiết có cài Python/dependency, và cần đúng DB connection mà container đang dùng):
+   ```bash
+   cd /home/trong/library-app
+   docker compose exec backend python manage.py createsuperuser
+   ```
+3. Nhập `Username`, `Email`, `Password` theo prompt.
+
+Kiểm tra lại tài khoản vừa tạo (tùy chọn):
+
+```bash
+docker compose exec backend python manage.py shell -c \
+  "from api.models import User; u = User.objects.get(username='<username-vừa-tạo>'); print(u.role, u.is_superuser)"
+```
+
+Kết quả mong đợi: `admin True`.
+```
