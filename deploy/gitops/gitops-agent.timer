@@ -1,0 +1,11 @@
+[Unit]
+Description=Run library-app GitOps reconciler every 2 minutes
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=2min
+Unit=gitops-agent.service
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,15 @@
+[Unit]
+Description=library-app GitOps reconciler (one-shot, triggered by gitops-agent.timer)
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=trong
+WorkingDirectory=/home/trong/library-app
+ExecStart=/home/trong/library-app/deploy/gitops/reconcile.sh
+
+# Basic hardening — adjust if reconcile.sh needs broader access.
+NoNewPrivileges=true
+ProtectSystem=full
