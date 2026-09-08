@@ -87,6 +87,29 @@ services:
     depends_on:
       - pgpool
 
+  # --- Backup định kỳ: mỗi 6h dump DB ra thư mục trên máy thật (Windows) ---
+  # Ghi thẳng qua SMB nhờ volume `host_pg_backups` (CIFS) khai báo bên dưới.
+  pg-backup:
+    build:
+      context: ./deploy/backup
+    image: library-pg-backup:latest
+    container_name: library_pg_backup
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_ADMIN_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
+      # 1 VM: "pg-0:5432 pg-1:5432" | sau khi tách pg-1 sang VM2: "pg-0:5432 <VM2_IP>:5432"
+      PG_NODES: "pg-0:5432 pg-1:5432"
+      BACKUP_INTERVAL: "21600"   # 6 giờ
+      KEEP: "28"                 # giữ 28 bản .dump gần nhất
+      TZ: "Asia/Ho_Chi_Minh"
+    volumes:
+      - host_pg_backups:/backups
+    depends_on:
+      - pg-0
+    restart: always
+
   backend:
     build:
       context: ./backend_library
@@ -125,3 +148,14 @@ volumes:
   pg_0_data:
   pg_1_data:
   pgadmin_data:
+
+  # Thư mục trên máy thật Windows, chia sẻ qua SMB.
+  # Trên Windows: share thư mục C:\Users\doant\OneDrive\Documents\Desktop\pg-backups
+  #   với Share name = pg-backups, cấp Change + Read cho user SMB_USERNAME.
+  # WIN_HOST_IP / SMB_USERNAME / SMB_PASSWORD lấy từ .env
+  host_pg_backups:
+    driver: local
+    driver_opts:
+      type: cifs
+      device: "//${WIN_HOST_IP}/pg-backups"
+      o: "username=${SMB_USERNAME},password=${SMB_PASSWORD},uid=0,gid=0,vers=3.0,file_mode=0640,dir_mode=0750,noserverino"
