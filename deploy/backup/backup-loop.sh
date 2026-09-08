@@ -53,7 +53,8 @@ do_backup() {
   rm -f "$BACKUP_DIR/.wtest"
 
   stamp="$(date +%F_%H%M%S)"
-  tmp="$BACKUP_DIR/.${POSTGRES_DB}-${stamp}.dump.part"
+  # $$ trong tên file tạm để lần chạy `once` và vòng lặp nền không đụng nhau.
+  tmp="$BACKUP_DIR/.${POSTGRES_DB}-${stamp}.$$.dump.part"
   final="$BACKUP_DIR/${POSTGRES_DB}-${stamp}.dump"
 
   log "dump từ ${host}:${port} -> $(basename "$final")"
