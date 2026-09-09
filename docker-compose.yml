@@ -61,6 +61,13 @@ services:
       PGPOOL_ADMIN_USERNAME: admin
       PGPOOL_ADMIN_PASSWORD: ${PGPOOL_ADMIN_PASSWORD}
       PGPOOL_ENABLE_HEALTH_CHECK: "yes"
+      PGPOOL_HEALTH_CHECK_PERIOD: "10"
+      PGPOOL_HEALTH_CHECK_MAX_RETRIES: "3"
+      PGPOOL_HEALTH_CHECK_RETRY_DELAY: "3"
+      # Sau khi repmgr đã cho node cũ rejoin làm standby, pgpool tự `attach`
+      # lại node đó (khi nó đang streaming từ primary) — không cần
+      # `docker compose restart pgpool` / `pcp_attach_node` thủ công nữa.
+      PGPOOL_AUTO_FAILBACK: "yes"
       PGPOOL_POSTGRES_CUSTOM_USERS: ${POSTGRES_USER}
       PGPOOL_POSTGRES_CUSTOM_PASSWORDS: ${POSTGRES_PASSWORD}
     ports:
