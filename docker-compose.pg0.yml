@@ -1,12 +1,17 @@
 # VM2 (${VM2_IP}) — Postgres HA node "pg-0".
 #   docker compose -f docker-compose.pg0.yml up -d
 #
-# Các node DB tìm nhau qua IP tĩnh của VM + cổng 5432 publish trên host,
-# KHÔNG qua mạng compose (vì nằm khác máy). pgpool + witness ở VM1.
+# network_mode: host — repmgrd tự kết nối tới CHÍNH mình qua REPMGR_NODE_NETWORK_NAME
+# (IP LAN của chính VM). Qua publish port bình thường, việc này là NAT-hairpin
+# (container tự gọi ra ngoài rồi vòng lại chính nó) mà nhiều mạng ảo (VMware
+# NAT/bridge + iptables) không xử lý được -> container crash-loop liên tục dù
+# node khác nối vào vẫn bình thường. host mode bỏ hẳn NAT của Docker cho node
+# này: bind thẳng vào cổng 5432 thật của VM, không cần "ports:" nữa.
 services:
   pg-0:
     image: bitnamilegacy/postgresql-repmgr:16.6.0
     container_name: library_pg0
+    network_mode: host
     env_file:
       - .env
     environment:
@@ -22,8 +27,6 @@ services:
       REPMGR_PRIMARY_HOST: ${VM2_IP}             # trỏ tới CHÍNH nó -> pg-0 khởi tạo làm primary
       REPMGR_PARTNER_NODES: ${VM2_IP}:5432,${VM3_IP}:5432,${VM1_IP}:5432
       REPMGR_PGHBA_TRUST_ALL: "yes"              # LAN riêng; siết lại nếu mạng không tin cậy
-    ports:
-      - "5432:5432"
     volumes:
       - pg_0_data:/bitnami/postgresql
     restart: always

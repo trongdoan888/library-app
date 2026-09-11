@@ -5,13 +5,19 @@
 #   VM2 ${VM2_IP}  -> pg-0   (docker-compose.pg0.yml)
 #   VM3 ${VM3_IP}  -> pg-1   (docker-compose.pg1.yml)
 #   VM1 ${VM1_IP}  -> pg-witness (quorum, KHÔNG giữ dữ liệu) + pgpool + backend/frontend
-# Các node nối nhau qua IP tĩnh + cổng 5432 publish trên mỗi host.
+# Các node repmgr (pg-0/pg-1/pg-witness) chạy network_mode: host — nối nhau
+# qua IP tĩnh + cổng 5432 thật của mỗi VM, không qua NAT publish của Docker
+# (tránh lỗi hairpin khi 1 node tự kết nối tới chính IP của nó).
 services:
 
   # --- repmgr witness: chỉ bỏ phiếu khi failover, không chứa dữ liệu ứng dụng ---
+  # network_mode: host — tránh NAT-hairpin khi repmgrd tự kết nối tới chính mình
+  # qua REPMGR_NODE_NETWORK_NAME=${VM1_IP} (xem docker-compose.pg0.yml). Vì vậy
+  # nó chiếm luôn cổng 5432 thật của VM1 — không cần "ports:" nữa.
   pg-witness:
     image: bitnamilegacy/postgresql-repmgr:16.6.0
     container_name: library_pg_witness
+    network_mode: host
     env_file:
       - .env
     environment:
@@ -28,8 +34,6 @@ services:
       REPMGR_PRIMARY_HOST: ${VM2_IP}
       REPMGR_PARTNER_NODES: ${VM2_IP}:5432,${VM3_IP}:5432,${VM1_IP}:5432
       REPMGR_PGHBA_TRUST_ALL: "yes"
-    ports:
-      - "5432:5432"
     volumes:
       - pg_witness_data:/bitnami/postgresql
     restart: always

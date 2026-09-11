@@ -2,10 +2,13 @@
 #   docker compose -f docker-compose.pg1.yml up -d
 #
 # Bật SAU pg-0 (VM2). Container sẽ tự pg_basebackup từ pg-0 rồi chạy standby.
+# network_mode: host — tránh NAT-hairpin khi repmgrd tự kết nối tới chính mình
+# qua REPMGR_NODE_NETWORK_NAME (xem giải thích trong docker-compose.pg0.yml).
 services:
   pg-1:
     image: bitnamilegacy/postgresql-repmgr:16.6.0
     container_name: library_pg1
+    network_mode: host
     env_file:
       - .env
     environment:
@@ -21,8 +24,6 @@ services:
       REPMGR_PRIMARY_HOST: ${VM2_IP}             # primary ban đầu = pg-0 -> pg-1 clone từ đó
       REPMGR_PARTNER_NODES: ${VM2_IP}:5432,${VM3_IP}:5432,${VM1_IP}:5432
       REPMGR_PGHBA_TRUST_ALL: "yes"
-    ports:
-      - "5432:5432"
     volumes:
       - pg_1_data:/bitnami/postgresql
     restart: always
