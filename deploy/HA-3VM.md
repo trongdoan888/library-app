@@ -339,6 +339,47 @@ ssh pg1@192.168.111.142 'docker start library_pg1'
 
 ---
 
+## Sự cố thường gặp khi triển khai (đã gặp thật, xử lý như sau)
+
+1. **`ufw` chặn Docker NAT-forward — bắt buộc sửa trên CẢ 3 VM, không chỉ 2 VM DB.**
+   Triệu chứng: `pgpool`/`repmgrd` log `getsockopt() failed` / `Operation now in progress`
+   / `timeout expired` khi 1 node cố nối tới IP của node khác (kể cả `pgpool` ở VM1 nối
+   ra `${VM2_IP}`/`${VM3_IP}`), dù `nc` từ **host** (ngoài container) tới cùng địa chỉ
+   lại thành công — vì `nc` ở host không đi qua chain `FORWARD` mà traffic từ container
+   Docker phải đi qua. Sửa trên **từng VM**:
+   ```bash
+   sudo sed -i 's/DEFAULT_FORWARD_POLICY="DROP"/DEFAULT_FORWARD_POLICY="ACCEPT"/' /etc/default/ufw
+   sudo systemctl restart ufw
+   sudo systemctl restart docker   # bắt buộc — `restart ufw` một mình có thể làm
+                                    # lệch thứ tự rule DOCKER/DOCKER-USER, phải restart
+                                    # daemon để nó tự chèn lại đúng chỗ
+   ```
+
+2. **`network_mode: host` cho `pg-0`/`pg-1`/`pg-witness`.**
+   Mỗi node repmgr tự kết nối tới **chính IP của nó** (`REPMGR_NODE_NETWORK_NAME`) để
+   `repmgrd` tự giám sát — qua publish port bình thường đây là NAT-hairpin (container
+   tự gọi ra ngoài rồi vòng lại chính mình) mà môi trường ảo hoá này không xử lý được,
+   dẫn tới container crash-loop liên tục dù node KHÁC nối vào vẫn bình thường. 3 file
+   compose đã đặt `network_mode: host` sẵn cho 3 service này — không cần `ports:`.
+
+3. **`REPMGR_NODE_NAME` của witness phải khớp mẫu `<chữ>-<số>`.**
+   `pg-witness` bị từ chối (`does not follow the required format`), phải đặt kiểu
+   `witness-3`. Đã sửa trong `docker-compose.yml`.
+
+4. **Sau nhiều lần container crash-loop, volume dữ liệu có thể dở dang.**
+   Nếu thấy lỗi kiểu `repmgr extension not found` dù Postgres start bình thường —
+   volume đã trải qua init dang dở từ các lần crash trước. Xoá volume, khởi tạo lại:
+   ```bash
+   docker compose -f docker-compose.pgX.yml down
+   docker volume rm library-app_pg_X_data
+   docker compose -f docker-compose.pgX.yml up -d
+   ```
+
+5. **Đổi `network_mode`/service definition thì phải `down` trước `up`**, `docker compose up -d`
+   đơn thuần không luôn recreate đúng khi kiểu network thay đổi.
+
+---
+
 ## Rollback về "tất cả trên VM1"
 
 ```bash
