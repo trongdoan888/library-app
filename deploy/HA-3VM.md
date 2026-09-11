@@ -378,6 +378,13 @@ ssh pg1@192.168.111.142 'docker start library_pg1'
 5. **Đổi `network_mode`/service definition thì phải `down` trước `up`**, `docker compose up -d`
    đơn thuần không luôn recreate đúng khi kiểu network thay đổi.
 
+6. **`pgpool` có lúc kẹt `FATAL: all backend nodes are down` sau khi primary chết**, dù
+   node còn lại đã lên primary và network vẫn thông (`nc` tới nó OK) — không tự thoát ra
+   được như trong test 1-VM trước đó (SPOF về logic, không chỉ hạ tầng). Sửa bằng
+   `docker compose restart pgpool` trên VM1; nếu vẫn kẹt, `sudo systemctl restart docker`
+   trên VM1. Đây là bằng chứng thật cho việc pgpool 1 instance là điểm yếu — muốn hết
+   hẳn phải chạy 2 pgpool + watchdog/VIP.
+
 ---
 
 ## Rollback về "tất cả trên VM1"
