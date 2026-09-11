@@ -27,7 +27,7 @@ services:
       POSTGRESQL_DATABASE: ${POSTGRES_DB}
       REPMGR_PASSWORD: ${REPMGR_PASSWORD}
       REPMGR_NODE_ID: "3"
-      REPMGR_NODE_NAME: pg-witness
+      REPMGR_NODE_NAME: witness-3           # tên witness phải khớp mẫu <chữ>-<số>
       REPMGR_NODE_NETWORK_NAME: ${VM1_IP}
       REPMGR_PORT_NUMBER: 5432
       REPMGR_NODE_TYPE: witness
