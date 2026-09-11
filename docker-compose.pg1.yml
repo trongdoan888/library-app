@@ -1,0 +1,31 @@
+# VM3 (${VM3_IP}) — Postgres HA node "pg-1".
+#   docker compose -f docker-compose.pg1.yml up -d
+#
+# Bật SAU pg-0 (VM2). Container sẽ tự pg_basebackup từ pg-0 rồi chạy standby.
+services:
+  pg-1:
+    image: bitnamilegacy/postgresql-repmgr:16.6.0
+    container_name: library_pg1
+    env_file:
+      - .env
+    environment:
+      POSTGRESQL_POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
+      POSTGRESQL_USERNAME: ${POSTGRES_USER}
+      POSTGRESQL_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRESQL_DATABASE: ${POSTGRES_DB}
+      REPMGR_PASSWORD: ${REPMGR_PASSWORD}
+      REPMGR_NODE_ID: "2"
+      REPMGR_NODE_NAME: pg-1
+      REPMGR_NODE_NETWORK_NAME: ${VM3_IP}
+      REPMGR_PORT_NUMBER: 5432
+      REPMGR_PRIMARY_HOST: ${VM2_IP}             # primary ban đầu = pg-0 -> pg-1 clone từ đó
+      REPMGR_PARTNER_NODES: ${VM2_IP}:5432,${VM3_IP}:5432,${VM1_IP}:5432
+      REPMGR_PGHBA_TRUST_ALL: "yes"
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_1_data:/bitnami/postgresql
+    restart: always
+
+volumes:
+  pg_1_data:

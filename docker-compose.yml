@@ -1,10 +1,17 @@
+# VM1 (${VM1_IP}) — app + pgpool + witness + backup.
+#   docker compose up -d
+#
+# HA DB tách 3 máy:
+#   VM2 ${VM2_IP}  -> pg-0   (docker-compose.pg0.yml)
+#   VM3 ${VM3_IP}  -> pg-1   (docker-compose.pg1.yml)
+#   VM1 ${VM1_IP}  -> pg-witness (quorum, KHÔNG giữ dữ liệu) + pgpool + backend/frontend
+# Các node nối nhau qua IP tĩnh + cổng 5432 publish trên mỗi host.
 services:
-  # --- Postgres HA cluster (repmgr handles replication + automatic failover) ---
-  # Cả pg-0, pg-1, pgpool đều là container trên VM1. Các node tìm nhau qua tên
-  # service trong mạng compose.
-  pg-0:
+
+  # --- repmgr witness: chỉ bỏ phiếu khi failover, không chứa dữ liệu ứng dụng ---
+  pg-witness:
     image: bitnamilegacy/postgresql-repmgr:16.6.0
-    container_name: library_pg0
+    container_name: library_pg_witness
     env_file:
       - .env
     environment:
@@ -13,47 +20,30 @@ services:
       POSTGRESQL_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRESQL_DATABASE: ${POSTGRES_DB}
       REPMGR_PASSWORD: ${REPMGR_PASSWORD}
-      REPMGR_PRIMARY_HOST: pg-0
-      REPMGR_PARTNER_NODES: pg-0,pg-1
-      REPMGR_NODE_NAME: pg-0
-      REPMGR_NODE_NETWORK_NAME: pg-0
+      REPMGR_NODE_ID: "3"
+      REPMGR_NODE_NAME: pg-witness
+      REPMGR_NODE_NETWORK_NAME: ${VM1_IP}
       REPMGR_PORT_NUMBER: 5432
+      REPMGR_NODE_TYPE: witness
+      REPMGR_PRIMARY_HOST: ${VM2_IP}
+      REPMGR_PARTNER_NODES: ${VM2_IP}:5432,${VM3_IP}:5432,${VM1_IP}:5432
+      REPMGR_PGHBA_TRUST_ALL: "yes"
+    ports:
+      - "5432:5432"
     volumes:
-      - pg_0_data:/bitnami/postgresql
+      - pg_witness_data:/bitnami/postgresql
     restart: always
 
-  pg-1:
-    image: bitnamilegacy/postgresql-repmgr:16.6.0
-    container_name: library_pg1
-    env_file:
-      - .env
-    environment:
-      POSTGRESQL_POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
-      POSTGRESQL_USERNAME: ${POSTGRES_USER}
-      POSTGRESQL_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRESQL_DATABASE: ${POSTGRES_DB}
-      REPMGR_PASSWORD: ${REPMGR_PASSWORD}
-      REPMGR_PRIMARY_HOST: pg-0
-      REPMGR_PARTNER_NODES: pg-0,pg-1
-      REPMGR_NODE_NAME: pg-1
-      REPMGR_NODE_NETWORK_NAME: pg-1
-      REPMGR_PORT_NUMBER: 5432
-    volumes:
-      - pg_1_data:/bitnami/postgresql
-    depends_on:
-      - pg-0
-    restart: always
-
-  # --- Connection pooler / load balancer in front of the cluster ---
-  # The backend (and pgAdmin) only ever talk to pgpool; pgpool always
-  # routes writes to whichever node repmgr currently considers primary.
+  # --- Connection pooler / load balancer đứng trước cụm DB (2 node ở VM2/VM3) ---
+  # backend & pgAdmin chỉ nói chuyện pgpool; pgpool luôn định tuyến write tới
+  # node repmgr đang coi là primary.
   pgpool:
     image: bitnamilegacy/pgpool:4.6.3
     container_name: library_pgpool
     env_file:
       - .env
     environment:
-      PGPOOL_BACKEND_NODES: 0:pg-0:5432,1:pg-1:5432
+      PGPOOL_BACKEND_NODES: 0:${VM2_IP}:5432,1:${VM3_IP}:5432
       # application_name mỗi standby dùng khi stream tới primary (bitnami
       # repmgr đặt = REPMGR_NODE_NAME). auto_failback cần list này để khớp
       # node trong pg_stat_replication; phải cùng độ dài với BACKEND_NODES.
@@ -75,10 +65,7 @@ services:
       PGPOOL_POSTGRES_CUSTOM_USERS: ${POSTGRES_USER}
       PGPOOL_POSTGRES_CUSTOM_PASSWORDS: ${POSTGRES_PASSWORD}
     ports:
-      - "5432:5432"
-    depends_on:
-      - pg-0
-      - pg-1
+      - "5433:5432"          # 5432 trên VM1 đã bị pg-witness chiếm; GUI ngoài nối cổng 5433
     healthcheck:
       test: ["CMD-SHELL", "PGPASSWORD=${POSTGRES_PASSWORD} psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -d ${POSTGRES_DB} -tAc 'SELECT 1'"]
       interval: 5s
@@ -112,15 +99,13 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_ADMIN_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
-      # Thử pg-0 rồi pg-1 (cùng mạng compose); script ưu tiên dump từ primary.
-      PG_NODES: "pg-0:5432 pg-1:5432"
+      # pg-0 ở VM2, pg-1 ở VM3 (theo IP). Script ưu tiên dump từ primary.
+      PG_NODES: "${VM2_IP}:5432 ${VM3_IP}:5432"
       BACKUP_INTERVAL: "21600"   # 6 giờ
       KEEP: "28"                 # giữ 28 bản .dump gần nhất
       TZ: "Asia/Ho_Chi_Minh"
     volumes:
       - host_pg_backups:/backups
-    depends_on:
-      - pg-0
     restart: always
 
   backend:
@@ -131,8 +116,7 @@ services:
     env_file:
       - .env
     environment:
-      # Points the backend at pgpool instead of a single Postgres node,
-      # so a primary failover is invisible to the app.
+      # backend nối pgpool qua mạng compose (tên service), không đổi khi failover.
       POSTGRES_HOST: pgpool
       POSTGRES_PORT: 5432
     ports:
@@ -158,8 +142,7 @@ services:
     restart: always
 
 volumes:
-  pg_0_data:
-  pg_1_data:
+  pg_witness_data:
   pgadmin_data:
 
   # Thư mục trên máy thật Windows, chia sẻ qua SMB.

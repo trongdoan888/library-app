@@ -1,0 +1,32 @@
+# VM2 (${VM2_IP}) — Postgres HA node "pg-0".
+#   docker compose -f docker-compose.pg0.yml up -d
+#
+# Các node DB tìm nhau qua IP tĩnh của VM + cổng 5432 publish trên host,
+# KHÔNG qua mạng compose (vì nằm khác máy). pgpool + witness ở VM1.
+services:
+  pg-0:
+    image: bitnamilegacy/postgresql-repmgr:16.6.0
+    container_name: library_pg0
+    env_file:
+      - .env
+    environment:
+      POSTGRESQL_POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
+      POSTGRESQL_USERNAME: ${POSTGRES_USER}
+      POSTGRESQL_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRESQL_DATABASE: ${POSTGRES_DB}
+      REPMGR_PASSWORD: ${REPMGR_PASSWORD}
+      REPMGR_NODE_ID: "1"
+      REPMGR_NODE_NAME: pg-0
+      REPMGR_NODE_NETWORK_NAME: ${VM2_IP}        # địa chỉ node khác dùng để nối tới pg-0
+      REPMGR_PORT_NUMBER: 5432
+      REPMGR_PRIMARY_HOST: ${VM2_IP}             # trỏ tới CHÍNH nó -> pg-0 khởi tạo làm primary
+      REPMGR_PARTNER_NODES: ${VM2_IP}:5432,${VM3_IP}:5432,${VM1_IP}:5432
+      REPMGR_PGHBA_TRUST_ALL: "yes"              # LAN riêng; siết lại nếu mạng không tin cậy
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_0_data:/bitnami/postgresql
+    restart: always
+
+volumes:
+  pg_0_data:
