@@ -378,6 +378,26 @@ ssh pg1@192.168.111.142 'docker start library_pg1'
 5. **Đổi `network_mode`/service definition thì phải `down` trước `up`**, `docker compose up -d`
    đơn thuần không luôn recreate đúng khi kiểu network thay đổi.
 
+6a. **Đĩa VM1 đầy 100% → hỏng dây chuyền.** `docker builder prune` tích luỹ hàng GB
+   sau nhiều lần build backend/frontend, không tự dọn. Triệu chứng: `pg-witness`
+   crash-loop (`cp: error writing ... No space left on device`), GitOps agent lỗi
+   `failed to write new configuration file .../config.lock`. Dọn:
+   ```bash
+   sudo docker builder prune -a -f   # thường chiếm nhiều nhất
+   sudo docker image prune -a -f
+   sudo journalctl --vacuum-size=200M
+   df -h /home
+   ```
+   Nếu trong lúc đĩa đầy có container bị bounce qua lại nhiều lần (đặc biệt các
+   node repmgr pg-0/pg-1/pg-witness), chúng có thể rơi vào trạng thái **mỗi node
+   tưởng mình từng là primary** (`"This node was acting as a primary before
+   restart!"` trong log) — không gỡ tay được, phải reset volume theo đúng thứ tự:
+   dừng hẳn TẤT CẢ node liên quan trước → xoá volume từng node → dựng lại lần
+   lượt bắt đầu từ node muốn làm primary (không được bật node standby trước,
+   nó sẽ thấy peer cũ và bối rối). Nhớ `gitops-agent.timer` trên VM2/VM3 có thể
+   tự "hồi sinh" container bạn vừa `down` (drift-correction) — dừng timer trước
+   khi reset, hoặc thao tác đủ nhanh trong khoảng 2 phút giữa 2 tick.
+
 6. **`pgpool` có lúc kẹt `FATAL: all backend nodes are down` sau khi primary chết**, dù
    node còn lại đã lên primary và network vẫn thông (`nc` tới nó OK) — không tự thoát ra
    được như trong test 1-VM trước đó (SPOF về logic, không chỉ hạ tầng). Sửa bằng
