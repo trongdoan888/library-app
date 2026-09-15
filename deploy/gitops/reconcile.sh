@@ -16,6 +16,14 @@
 # to match it — that's what makes this "pull-based" GitOps rather than the
 # previous CI-push model.
 #
+# Versioned & immutable: submodules are checked out at the exact SHA pinned
+# in library-app's tree (gitlink), NOT the latest tip of their own main.
+# backend_library/frontend_library's CI bumps that pin (via a "chore: bump
+# ... to <sha>" commit pushed to library-app main) once gitleaks/trivy pass
+# on their own main — see their .github/workflows/deploy.yml. So "what's
+# running" is always exactly one library-app commit, and rollback is a
+# `git revert` of the bump commit in THIS repo, not in the submodule repo.
+#
 # Per-VM config via environment (set in the gitops-agent.service unit):
 #   REPO_DIR      - checkout location        (default /home/trong/library-app)
 #   COMPOSE_FILE  - which compose file this VM owns
@@ -54,10 +62,11 @@ if [ "$LOCAL_SHA" != "$REMOTE_SHA" ]; then
   git submodule sync --recursive --quiet
 fi
 
-# Always follow each submodule's own main branch tip (not just the SHA
-# pinned in library-app's tree), matching the previous deploy.yml behavior
-# of always deploying the latest main of backend_library/frontend_library.
-git submodule update --init --recursive --remote --quiet
+# Check out exactly the SHA pinned in library-app's tree — no --remote.
+# Deploying a newer backend_library/frontend_library commit means the pin
+# itself must move (a commit in THIS repo), which is what backend_library's
+# and frontend_library's CI does automatically after their scans pass.
+git submodule update --init --recursive --quiet
 
 BACKEND_AFTER=$(git -C backend_library rev-parse HEAD)
 FRONTEND_AFTER=$(git -C frontend_library rev-parse HEAD)

@@ -44,14 +44,30 @@ hẳn job `deploy`, chỉ giữ lại `gitleaks` / `trivy-fs` / `trivy-image` l�
 cổng kiểm tra chất lượng cho PR/push. Việc này đổi hành vi deploy thật nên
 mình chưa tự sửa — nói khi nào bạn muốn áp dụng.
 
+## Versioned & immutable — submodule ghim SHA, không đuổi theo `main`
+
+`reconcile.sh` checkout `backend_library`/`frontend_library` đúng SHA đã
+**ghim sẵn** trong cây git của `library-app` (không còn `--remote`). Con
+trỏ đó chỉ di chuyển khi có 1 commit `chore: bump <submodule> to <sha>`
+trên `library-app` main — commit này do CI của chính `backend_library`/
+`frontend_library` tự tạo (job `bump-library-app` trong `deploy.yml`, chạy
+sau khi `gitleaks`/`trivy` pass, dùng secret `LIBRARY_APP_PUSH_TOKEN`).
+
+Kết quả: lịch sử Git của `library-app` phản ánh đúng 100% "commit nào đang
+chạy tại thời điểm nào" — merge vào `backend_library`/`frontend_library`
+main không tự deploy ngay, mà kích hoạt CI tạo commit bump, GitOps agent
+mới thấy `library-app main updated` và rebuild.
+
 ## Kiểm thử & rollback
 
-- Push 1 thay đổi nhỏ vào `backend_library` hoặc `frontend_library` main,
-  đợi tối đa 2 phút, xem `journalctl -u gitops-agent.service` để thấy nó
-  tự rebuild.
-- Rollback: `git revert` (hoặc reset) commit lỗi trên nhánh `main` của repo
-  submodule bị lỗi — tick kế tiếp của agent sẽ tự đưa container về đúng
-  commit đó. Không cần SSH vào VM để deploy tay.
+- Push 1 thay đổi nhỏ vào `backend_library` hoặc `frontend_library` main →
+  đợi CI chạy xong (`gitleaks`/`trivy` + job `bump-library-app`) → đợi tối
+  đa 2 phút để agent trên VM tick → xem `journalctl -u gitops-agent.service`
+  để thấy nó tự rebuild.
+- Rollback: `git revert` commit **`chore: bump ...`** trên nhánh `main` của
+  **`library-app`** (không phải ở repo submodule nữa) — tick kế tiếp của
+  agent sẽ tự đưa container về đúng SHA cũ. Không cần SSH vào VM để deploy
+  tay.
 - Drift tự phục hồi: nếu ai đó `docker stop backend` trên VM, tick kế tiếp
   (`docker compose up -d --remove-orphans` trong reconcile.sh) sẽ tự khởi
   động lại nó.
@@ -62,11 +78,11 @@ mình chưa tự sửa — nói khi nào bạn muốn áp dụng.
   listener nhỏ trên VM (vd. `adnanh/webhook`) chỉ để *trigger*
   `systemctl start gitops-agent.service` ngay khi có push — vẫn giữ đúng
   tinh thần pull (agent tự đọc Git, không nhận code push qua webhook).
-- **GitOps chặt hơn**: thay vì luôn theo `main` mới nhất của submodule
-  (`--remote`), pin SHA submodule trong chính repo `library-app` và để CI
-  của backend/frontend mở PR bump SHA sau khi build+test qua — khi đó
-  lịch sử Git của `library-app` phản ánh đúng 100% những gì đang chạy,
-  và mọi thay đổi deploy đều có PR review.
+- **Chặn deploy khi scan phát hiện vấn đề**: hiện `gitleaks`/`trivy` đặt
+  `exit-code: 0` (không bao giờ fail job) nên job `bump-library-app` luôn
+  chạy dù scan có cảnh báo. Muốn scan thật sự chặn deploy thì đổi thành
+  `exit-code: 1` — khi đó `needs: [gitleaks, trivy-fs, trivy-image]` mới
+  có ý nghĩa gate thật.
 - **UI/dashboard**: nếu muốn xem trạng thái sync trực quan, cân nhắc
   [Komodo](https://komo.do) — tool self-hosted làm đúng việc GitOps cho
   Docker Compose, có UI thay vì chỉ đọc log qua `journalctl`.
