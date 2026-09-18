@@ -86,7 +86,7 @@ node kia — không cần thao tác tay nhờ `repmgr` rejoin + `PGPOOL_AUTO_FAI
 
 | Ngày chạy | Bước 0 baseline | RTO (~giây) | RPO (chênh id) | Ghi chú sự cố |
 |---|---|---|---|---|
-| | | | | |
+| 2026-09-18 | khoẻ (Timeline 1) | 14 | 0 (155=155) | Không cần `kick-pgpool` — auto_failback tự attach lại pg-0 sạch, không tái diễn "all backend down" |
 
 ## Tham chiếu
 
