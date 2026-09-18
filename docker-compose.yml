@@ -81,7 +81,6 @@ services:
   pgadmin:
     image: dpage/pgadmin4:snapshot
     container_name: library_pgadmin
-    network_mode: host
     restart: always
     env_file:
       - .env
