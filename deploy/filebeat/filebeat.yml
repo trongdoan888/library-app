@@ -10,10 +10,18 @@ filebeat.autodiscover:
       # modes are mutually exclusive in practice: with hints.enabled, Filebeat
       # only looks at per-container `co.elastic.logs/*` labels and silently
       # ignores `templates` entirely (no error, just 0 harvesters started).
+      #
+      # Match on container name, not the compose-project label: the label
+      # key has literal dots (`com.docker.compose.project`), and depending
+      # on the beats version's `labels.dedot` default those dots either get
+      # collapsed to `_` or create 5 levels of nested fields - either way the
+      # flat path below silently matches nothing. Every service here is
+      # named "library_*" (see container_name: in the compose files), so
+      # matching on that avoids the dot ambiguity entirely.
       templates:
         - condition:
             contains:
-              docker.container.labels.com_docker_compose_project: library-app
+              docker.container.name: "library_"
           config:
             - type: container
               paths:
