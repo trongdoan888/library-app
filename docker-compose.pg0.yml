@@ -31,7 +31,23 @@ services:
       - pg_0_data:/bitnami/postgresql
     restart: always
 
+  # Ship pg-0's stdout to the Elasticsearch trên VM1 qua LAN (xem deploy/LOGGING.md).
+  # Cần mở port 9200 trên ufw của VM1 cho subnet LAN, giống cách 5432 đã mở
+  # (HA-3VM.md mục 0.4) - script này không tự làm việc đó.
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.15.3
+    container_name: library_filebeat_pg0
+    user: root
+    env_file:
+      - .env
+    environment:
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+      ES_HOST: ${VM1_IP}:9200
+    volumes:
+      - ./deploy/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: always
+
 volumes:
   pg_0_data:
-
-# hdshofisdf

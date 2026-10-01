@@ -145,9 +145,90 @@ services:
       - backend
     restart: always
 
+  # --- Log pipeline: Filebeat ships every container's stdout to Elasticsearch,
+  # Kibana visualizes it, Elastic Security runs detection rules on top.
+  # ponytail: single ES node, no TLS between containers (internal docker
+  # network only), ILM off (index grows unbounded) - fine for a homelab,
+  # add ILM + TLS if this ever needs to survive an audit.
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    container_name: library_elasticsearch
+    env_file:
+      - .env
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "true"
+      xpack.security.http.ssl.enabled: "false"
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf -u elastic:${ELASTIC_PASSWORD} http://localhost:9200/_cluster/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    restart: always
+
+  # One-shot: gives the built-in kibana_system user a password so Kibana can
+  # authenticate. Re-running is harmless (just resets the same password).
+  es-setup:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    container_name: library_es_setup
+    env_file:
+      - .env
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    entrypoint: ["bash", "-c"]
+    command:
+      - |
+        curl -sf -u elastic:${ELASTIC_PASSWORD} -X POST \
+          http://elasticsearch:9200/_security/user/kibana_system/_password \
+          -H 'Content-Type: application/json' \
+          -d "{\"password\":\"${KIBANA_PASSWORD}\"}"
+    restart: "no"
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.15.3
+    container_name: library_kibana
+    env_file:
+      - .env
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+      ELASTICSEARCH_USERNAME: kibana_system
+      ELASTICSEARCH_PASSWORD: ${KIBANA_PASSWORD}
+    ports:
+      - "5601:5601"
+    depends_on:
+      es-setup:
+        condition: service_completed_successfully
+    restart: always
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.15.3
+    container_name: library_filebeat
+    user: root
+    env_file:
+      - .env
+    environment:
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+    volumes:
+      - ./deploy/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    restart: always
+
 volumes:
   pg_witness_data:
   pgadmin_data:
+  es_data:
 
   # Thư mục trên máy thật Windows, chia sẻ qua SMB.
   # Trên Windows: share thư mục C:\Users\doant\OneDrive\Documents\Desktop\pg-backups

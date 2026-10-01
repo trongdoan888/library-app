@@ -1,0 +1,35 @@
+# Autodiscover every container in this compose project and ship its stdout.
+# backend/frontend logs come out as one JSON object per line (Django's
+# JsonFormatter, see backend_library/api/logging_json.py) and get parsed
+# straight into fields; postgres/pgpool/pgadmin logs aren't JSON, so the
+# parse fails silently and they land in `message` instead - both are fine.
+filebeat.autodiscover:
+  providers:
+    - type: docker
+      hints.enabled: true
+      templates:
+        - condition:
+            contains:
+              docker.container.labels.com_docker_compose_project: library-app
+          config:
+            - type: container
+              paths:
+                - /var/lib/docker/containers/${data.docker.container.id}/*.log
+              json.keys_under_root: true
+              json.add_error_key: true
+
+processors:
+  - add_docker_metadata: ~
+
+output.elasticsearch:
+  # VM1 reaches ES by the compose service name; VM2/VM3 (pg-0/pg-1, separate
+  # compose files/hosts) set ES_HOST=${VM1_IP}:9200 to reach it over the LAN.
+  hosts: ["${ES_HOST:elasticsearch:9200}"]
+  username: "elastic"
+  password: "${ELASTIC_PASSWORD}"
+  index: "library-logs-%{+yyyy.MM.dd}"
+
+setup.template.name: "library-logs"
+setup.template.pattern: "library-logs-*"
+# ponytail: ILM off - index grows forever, add a policy if disk gets tight.
+setup.ilm.enabled: false
