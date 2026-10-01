@@ -6,7 +6,10 @@
 filebeat.autodiscover:
   providers:
     - type: docker
-      hints.enabled: true
+      # Template-based matching (condition below), NOT hints-based - the two
+      # modes are mutually exclusive in practice: with hints.enabled, Filebeat
+      # only looks at per-container `co.elastic.logs/*` labels and silently
+      # ignores `templates` entirely (no error, just 0 harvesters started).
       templates:
         - condition:
             contains:
