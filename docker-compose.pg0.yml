@@ -38,6 +38,9 @@ services:
     image: docker.elastic.co/beats/filebeat:8.15.3
     container_name: library_filebeat_pg0
     user: root
+    # filebeat.yml bind-mount từ git checkout (owner = user VM, không phải
+    # root) -> Beats chặn khởi động nếu không có cờ này (xem docker-compose.yml).
+    command: ["--strict.perms=false"]
     env_file:
       - .env
     environment:

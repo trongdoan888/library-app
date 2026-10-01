@@ -34,6 +34,7 @@ services:
     image: docker.elastic.co/beats/filebeat:8.15.3
     container_name: library_filebeat_pg1
     user: root
+    command: ["--strict.perms=false"]
     env_file:
       - .env
     environment:

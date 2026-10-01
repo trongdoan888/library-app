@@ -212,6 +212,11 @@ services:
     image: docker.elastic.co/beats/filebeat:8.15.3
     container_name: library_filebeat
     user: root
+    # filebeat.yml is bind-mounted from the git checkout (owned by the VM's
+    # login user, not root) - Beats refuses to start otherwise ("config file
+    # must be owned by root"). --strict.perms=false is Elastic's documented
+    # workaround for exactly this bind-mount-from-git setup.
+    command: ["--strict.perms=false"]
     env_file:
       - .env
     environment:
