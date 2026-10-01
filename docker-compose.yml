@@ -216,7 +216,9 @@ services:
     # login user, not root) - Beats refuses to start otherwise ("config file
     # must be owned by root"). --strict.perms=false is Elastic's documented
     # workaround for exactly this bind-mount-from-git setup.
-    command: ["--strict.perms=false"]
+    # -e: log to stderr (so `docker logs` actually shows something) instead
+    # of the default of writing to a file inside the container.
+    command: ["-e", "--strict.perms=false"]
     env_file:
       - .env
     environment:

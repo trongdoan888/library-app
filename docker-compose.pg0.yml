@@ -40,7 +40,9 @@ services:
     user: root
     # filebeat.yml bind-mount từ git checkout (owner = user VM, không phải
     # root) -> Beats chặn khởi động nếu không có cờ này (xem docker-compose.yml).
-    command: ["--strict.perms=false"]
+    # -e: log ra stderr thay vì ghi vào file nội bộ container (không thì
+    # `docker logs` luôn trống dù filebeat lỗi hay chạy tốt).
+    command: ["-e", "--strict.perms=false"]
     env_file:
       - .env
     environment:
