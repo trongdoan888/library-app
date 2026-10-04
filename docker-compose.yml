@@ -201,6 +201,9 @@ services:
       ELASTICSEARCH_HOSTS: http://elasticsearch:9200
       ELASTICSEARCH_USERNAME: kibana_system
       ELASTICSEARCH_PASSWORD: ${KIBANA_PASSWORD}
+      # Bắt buộc cho Alerting/Detection Rules (Giai đoạn 7) - thiếu sẽ lỗi
+      # "Encrypted Saved Objects plugin is missing encryption key".
+      XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY: ${KIBANA_ENCRYPTION_KEY}
     ports:
       - "5601:5601"
     depends_on:
