@@ -18,10 +18,20 @@ filebeat.autodiscover:
       # flat path below silently matches nothing. Every service here is
       # named "library_*" (see container_name: in the compose files), so
       # matching on that avoids the dot ambiguity entirely.
+      # Exclude filebeat's own container(s): harvesting your own log shipper's
+      # stdout is a self-feedback loop (it logs about shipping events, which
+      # gets harvested, which gets shipped and logged about again...). Its
+      # metrics log lines are also large enough that the JSON parser chokes
+      # on fragments of them, flooding the index with "Error decoding JSON"
+      # noise (seen in production: 10k+ junk docs in under a day).
       templates:
         - condition:
-            contains:
-              docker.container.name: "library_"
+            and:
+              - contains:
+                  docker.container.name: "library_"
+              - not:
+                  contains:
+                    docker.container.name: "filebeat"
           config:
             - type: container
               paths:
