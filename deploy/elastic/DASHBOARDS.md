@@ -34,8 +34,8 @@ timestamp field `@timestamp`.
 |---|---|---|
 | CREATE/UPDATE/DELETE theo thời gian | Bar chart, break down by `event.action` | `event.category:"database"` |
 | Theo resource | Data table (break down by `resource`) | `event.category:"database"` |
-| Theo user | Data table (break down by `user`) | `event.category:"database"` |
-| Theo IP (join qua access log cùng thời điểm) | dùng bảng Access log lọc theo `user`/`endpoint` tương ứng | — |
+| Theo actor | Data table (break down by `actor`) | `event.category:"database"` |
+| Theo IP (join qua access log cùng thời điểm) | dùng bảng Access log lọc theo `actor`/`endpoint` tương ứng | — |
 
 ## 4. Security Dashboard
 

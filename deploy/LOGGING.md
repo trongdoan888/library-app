@@ -75,12 +75,12 @@ Từ `backend_library/api/logging_json.py` + `api/audit.py`:
 
 | Field | Ý nghĩa |
 |---|---|
-| `@timestamp`, `level`, `service`, `logger` | chuẩn, `service` luôn `"backend"` |
+| `@timestamp`, `level`, `app`, `logger` | chuẩn, `app` luôn `"backend"` (đặt tên `app` không phải `service` vì ECS khóa `service` là object, xem ghi chú dưới) |
 | `event.category` | `authentication` \| `web` \| `database` |
 | `event.action` | `login` \| `account_locked` \| `token_refresh` \| `http_request` \| `create`\|`update`\|`delete` |
 | `event.outcome` | `success` \| `failure` |
-| `user`, `user_id` | actor đang đăng nhập tại thời điểm log (JWT auth) |
-| `username` | (chỉ ở event login) tài khoản đang thử đăng nhập — khác `user` vì lúc đó chưa auth xong |
+| `actor`, `user_id` | actor đang đăng nhập tại thời điểm log (JWT auth) — tên `actor` không phải `user` vì lý do tương tự `app`/`service` |
+| `username` | (chỉ ở event login) tài khoản đang thử đăng nhập — khác `actor` vì lúc đó chưa auth xong |
 | `method`, `endpoint`, `status`, `duration_ms`, `ip` | Access log (mọi request) |
 | `resource`, `resource_id` | Audit/CRUD log — tên model + pk, **không** log giá trị field |
 | `message` | log dạng string thường (Django `django.request`/`django.security`, không phải JSON) |
@@ -93,6 +93,28 @@ Log của postgres/pgpool/pgadmin không phải JSON nên rơi vào field `messa
 api/view/login.py` (chỉ truyền `username`, không truyền credential nào) và
 self-test `JsonFormatter` (field `extra` của LogRecord — nơi Django có thể gắn
 `request` object — không bao giờ được đọc).
+
+## Sự cố thật đã gặp khi deploy (để tránh lặp lại)
+
+- **Field tên trùng với ECS reserved object → Elasticsearch từ chối cả document
+  (HTTP 400), Filebeat âm thầm drop, không có gì trong log app báo lỗi.**
+  Gặp với `service` (đổi thành `app`) và `user` (đổi thành `actor`). ECS định
+  nghĩa cả hai là **object** (`service.name`, `user.name`...); gửi lên dạng
+  string phẳng → `document_parsing_exception`. Cách phát hiện: gửi thẳng 1
+  dòng log thật (copy nguyên văn từ `docker compose logs backend`) vào
+  Elasticsearch bằng `curl -X POST .../_doc`, đọc thẳng lỗi trả về — đừng đoán
+  qua Kibana UI hay log Filebeat (Filebeat chỉ in "Cannot index event
+  (status=400): dropping event!" không kèm lý do chi tiết). Trước khi thêm field
+  mới vào `log_event()`, tránh các tên ECS hay dùng dưới dạng object:
+  `event`, `service`, `user`, `host`, `agent`, `container`, `log`, `error`,
+  `http`, `url`, `process`, `network`.
+- **Filebeat tự harvest log của chính nó** → vòng lặp tự log, dòng metrics
+  khổng lồ của nó bị parse lỗi liên tục, 10.000+ document rác trong 1 ngày.
+  Đã loại trừ container `*filebeat*` khỏi điều kiện autodiscover.
+- **Backend không tự rebuild khi submodule bump** dù GitOps đang chạy — nghi
+  do chạy `git reset --hard` thủ công xen giữa lúc debug làm gitops bỏ lỡ thời
+  điểm so sánh SHA. Luôn `docker compose build backend` tay sau khi biết chắc
+  code backend đổi, đừng chỉ tin gitops khi đang can thiệp thủ công song song.
 
 ## Giới hạn đã biết (ponytail)
 

@@ -78,7 +78,7 @@ create_rule "bulk delete" '{
   "type": "threshold",
   "language": "kuery",
   "query": "event.category:\"database\" and event.action:\"delete\"",
-  "threshold": {"field": ["user"], "value": 10},
+  "threshold": {"field": ["actor"], "value": 10},
   "index": ["library-logs-*"],
   "from": "now-5m",
   "interval": "5m",

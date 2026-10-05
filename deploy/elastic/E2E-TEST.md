@@ -57,7 +57,7 @@ curl -s -X DELETE http://localhost:8000/api/book/ -H "Authorization: Bearer $TOK
 sleep 2
 search "{\"query\":{\"bool\":{\"filter\":[{\"term\":{\"event.action\":\"delete\"}},{\"term\":{\"resource_id\":\"$ID\"}}]}}}"
 ```
-Mỗi bước kỳ vọng 1 hit với `resource:"Book"`, `resource_id` khớp `$ID`, `user`
+Mỗi bước kỳ vọng 1 hit với `resource:"Book"`, `resource_id` khớp `$ID`, `actor`
 là username của `<admin>`.
 
 ## TEST 6 — Gọi API không đủ quyền
