@@ -1,9 +1,15 @@
 # Logging & Security Monitoring (ELK)
 
 Chuỗi: Django (Application/Access/Auth/Audit/CRUD log JSON ra stdout) → Docker
-log driver → Filebeat → Elasticsearch → Kibana → Elastic Security detection
-rules → alert → dashboard. PostgreSQL (pg-0/pg-1/pg-witness) cũng nằm trong
-pipeline (xem "VM2/VM3" bên dưới).
+log driver → Filebeat → **Logstash** → Elasticsearch → Kibana → Elastic
+Security detection rules → alert → dashboard. PostgreSQL (pg-0/pg-1/pg-witness)
+cũng nằm trong pipeline (xem "VM2/VM3" bên dưới).
+
+**ELK đúng nghĩa** (không chỉ "EK"): Filebeat không gửi thẳng tới Elasticsearch
+nữa mà gửi qua giao thức beats tới Logstash (`deploy/logstash/logstash.conf`,
+cổng 5044), Logstash mới là thành phần nói chuyện với Elasticsearch. Không có
+filter nào ở Logstash — Filebeat đã parse JSON trước khi gửi — nên đây chỉ là
+1 trạm trung chuyển, nhưng đúng vai trò "L" trong ELK.
 
 Elasticsearch + Kibana chỉ chạy **1 nơi duy nhất: VM1** (`docker-compose.yml`).
 VM2 (pg-0) và VM3 (pg-1) mỗi máy chạy thêm 1 Filebeat riêng, gửi log qua LAN
@@ -13,19 +19,22 @@ Filebeat trung tâm nào "nhìn xuyên" 3 VM được.
 
 ## Yêu cầu trước khi chạy
 
-- **RAM VM1**: Elasticsearch (~1GB thực tế dù đặt heap 512m) + Kibana (~1GB) +
-  Filebeat (~100MB) cộng thêm vào VM1 vốn đã chạy pgpool/witness/pgadmin/backend/
-  frontend. Khuyến nghị VM1 có **≥ 8GB RAM**; thiếu RAM thì `elasticsearch` bị
-  OOM-killed đầu tiên (`docker compose logs elasticsearch`).
+- **RAM VM1**: Elasticsearch (~1GB thực tế dù đặt heap 512m) + Logstash (~500MB,
+  heap đặt 256m) + Kibana (~1GB) + Filebeat (~100MB) cộng thêm vào VM1 vốn đã
+  chạy pgpool/witness/pgadmin/backend/frontend. Khuyến nghị VM1 có **≥ 8GB RAM**;
+  thiếu RAM thì `elasticsearch` bị OOM-killed đầu tiên (`docker compose logs elasticsearch`).
 - Trên VM1, set trước khi `up` (Elasticsearch cần, không set sẽ crash-loop
   `max virtual memory areas vm.max_map_count too low`):
   ```bash
   sudo sysctl -w vm.max_map_count=262144
   echo 'vm.max_map_count=262144' | sudo tee -a /etc/sysctl.conf
   ```
-- **Firewall VM1**: mở thêm cổng 9200 cho LAN (giống cách 5432 đã mở ở
-  HA-3VM.md mục 0.4) để Filebeat trên VM2/VM3 gửi log tới được:
+- **Firewall VM1**: mở cổng 5044 cho LAN (giống cách 5432 đã mở ở HA-3VM.md
+  mục 0.4) để Filebeat trên VM2/VM3 gửi log tới Logstash được; cổng 9200 chỉ
+  cần mở nếu muốn gọi API Elasticsearch trực tiếp từ xa (không bắt buộc cho
+  pipeline log hoạt động, vì Filebeat giờ không nói chuyện thẳng với ES nữa):
   ```bash
+  sudo ufw allow from 192.168.111.0/24 to any port 5044 proto tcp
   sudo ufw allow from 192.168.111.0/24 to any port 9200 proto tcp
   ```
 - `.env` (cùng 1 bản, copy sang cả 3 VM như đang làm) cần thêm
@@ -37,12 +46,14 @@ Filebeat trung tâm nào "nhìn xuyên" 3 VM được.
 ```bash
 docker compose up -d elasticsearch
 docker compose logs -f elasticsearch   # chờ "started"
-docker compose up -d es-setup kibana filebeat
+docker compose up -d es-setup kibana logstash
+docker compose logs -f logstash        # chờ "Pipelines running"
+docker compose up -d filebeat
 curl -s -u elastic:$ELASTIC_PASSWORD http://localhost:9200/_cluster/health
 # Kibana: http://<VM1_IP>:5601  (đăng nhập elastic / $ELASTIC_PASSWORD)
 ```
 
-**VM2 (pg0) và VM3 (pg1)** — sau khi VM1 đã lên và cổng 9200 đã mở:
+**VM2 (pg0) và VM3 (pg1)** — sau khi VM1 đã lên và cổng 5044 đã mở:
 ```bash
 cd ~/library-app
 docker compose -f docker-compose.pg0.yml up -d filebeat   # đổi .pg1.yml trên VM3
@@ -118,8 +129,12 @@ self-test `JsonFormatter` (field `extra` của LogRecord — nơi Django có th�
 
 ## Giới hạn đã biết (ponytail)
 
-- Không bật ILM (`setup.ilm.enabled: false`) → index `library-logs-*` phình vô hạn.
-  Thêm ILM policy khi ổ đĩa VM1 bắt đầu căng.
+- Không bật ILM (Logstash `manage_template => false`, không cấu hình policy nào)
+  → index `library-logs-*` phình vô hạn. Thêm ILM policy khi ổ đĩa VM1 bắt đầu căng.
+- Logstash không filter/transform gì (Filebeat đã parse JSON sẵn) — chỉ đóng
+  vai trò trung chuyển đúng chuẩn ELK. Nếu sau này cần enrich/filter dữ liệu
+  (geoip theo `ip`, drop field nhạy cảm...), đây là chỗ thêm, không phải sửa
+  Filebeat hay Django.
 - Elasticsearch/Kibana không bật TLS giữa các container/VM (chỉ basic auth) —
   chấp nhận được vì chỉ chạy trong LAN nội bộ 3 VM, không expose Internet.
 - pgpool/pg-witness KHÔNG có Filebeat riêng (chạy trên VM1, đã được Filebeat

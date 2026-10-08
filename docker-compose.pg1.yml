@@ -28,7 +28,7 @@ services:
       - pg_1_data:/bitnami/postgresql
     restart: always
 
-  # Ship pg-1's stdout tới Elasticsearch trên VM1 qua LAN - xem docker-compose.pg0.yml
+  # Ship pg-1's stdout tới Logstash trên VM1 qua LAN - xem docker-compose.pg0.yml
   # cho ghi chú đầy đủ (giống hệt, chỉ khác container_name).
   filebeat:
     image: docker.elastic.co/beats/filebeat:8.15.3
@@ -38,8 +38,7 @@ services:
     env_file:
       - .env
     environment:
-      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
-      ES_HOST: ${VM1_IP}:9200
+      LOGSTASH_HOST: ${VM1_IP}:5044
     volumes:
       - ./deploy/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro

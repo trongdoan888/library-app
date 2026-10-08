@@ -192,6 +192,24 @@ services:
           -d "{\"password\":\"${KIBANA_PASSWORD}\"}"
     restart: "no"
 
+  # L trong ELK: nhan event beats tu Filebeat (ca 3 VM), chuyen toi Elasticsearch.
+  # Khong filter - Filebeat da parse JSON truoc khi gui.
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.15.3
+    container_name: library_logstash
+    env_file:
+      - .env
+    environment:
+      LS_JAVA_OPTS: "-Xms256m -Xmx256m"
+    volumes:
+      - ./deploy/logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+    ports:
+      - "5044:5044"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    restart: always
+
   kibana:
     image: docker.elastic.co/kibana/kibana:8.15.3
     container_name: library_kibana
@@ -224,15 +242,13 @@ services:
     command: ["-e", "--strict.perms=false"]
     env_file:
       - .env
-    environment:
-      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
     volumes:
       - ./deploy/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
-      elasticsearch:
-        condition: service_healthy
+      logstash:
+        condition: service_started
     restart: always
 
 volumes:
