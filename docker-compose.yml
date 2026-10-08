@@ -123,8 +123,8 @@ services:
       # backend nối pgpool qua mạng compose (tên service), không đổi khi failover.
       POSTGRES_HOST: pgpool
       POSTGRES_PORT: 5432
-    ports:
-      - "8000:8000"
+    # Không publish port 8000 ra host nữa - chỉ nginx (và các container khác
+    # trong mạng compose) gọi tới backend qua tên service "backend:8000".
     restart: always
     depends_on:
       pgpool:
@@ -137,12 +137,29 @@ services:
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
     container_name: library_frontend
-    ports:
-      - "3000:3000"
+    # Không publish port 3000 ra host nữa - chỉ nginx gọi tới qua "frontend:3000".
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
     depends_on:
       - backend
+    restart: always
+
+  # Cổng vào duy nhất của cả app: /api/*, /admin/*, /static/* -> backend,
+  # còn lại -> frontend. Gộp về 1 origin nên bỏ được CORS cho đường đi qua
+  # đây, và frontend/backend giờ không còn lộ port trực tiếp ra ngoài.
+  # Access log của nginx (JSON, có status/duration_ms thật - thứ mà middleware
+  # của Next.js không có được vì nó chạy trước khi response hoàn tất) tự được
+  # Filebeat thu qua autodiscover như mọi container "library_*" khác.
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: library_nginx
+    volumes:
+      - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+      - frontend
     restart: always
 
   # --- Log pipeline: Filebeat ships every container's stdout to Elasticsearch,
