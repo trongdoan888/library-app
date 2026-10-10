@@ -102,3 +102,70 @@ create_rule "user resource change" '{
   "risk_score": 47,
   "enabled": true
 }'
+
+# 5. Host Authentication - SSH brute force (auth.log is unparsed text, so the
+# threshold groups by host, not by source IP)
+create_rule "host ssh brute-force" '{
+  "rule_id": "library-host-ssh-bruteforce",
+  "name": "SSH brute-force on host",
+  "description": "5+ failed SSH passwords on the same host within 5 minutes.",
+  "type": "threshold",
+  "language": "kuery",
+  "query": "log_source:\"host_auth\" and message:\"Failed password\"",
+  "threshold": {"field": ["host.name"], "value": 5},
+  "index": ["library-logs-*"],
+  "from": "now-5m",
+  "interval": "5m",
+  "severity": "high",
+  "risk_score": 73,
+  "enabled": true
+}'
+
+# 6. Host Audit - auditd watch hit (rules in deploy/LOGGING.md all use key lib_audit)
+create_rule "host sensitive file change" '{
+  "rule_id": "library-host-sensitive-file",
+  "name": "Sensitive host file or docker.sock touched",
+  "description": "auditd watch lib_audit fired: /etc/passwd, /etc/shadow, /etc/sudoers, sshd_config or docker.sock.",
+  "type": "query",
+  "language": "kuery",
+  "query": "log_source:\"host_audit\" and message:\"lib_audit\"",
+  "index": ["library-logs-*"],
+  "from": "now-5m",
+  "interval": "5m",
+  "severity": "high",
+  "risk_score": 73,
+  "enabled": true
+}'
+
+# 7. DB Audit - pgaudit DDL/role statements (also catches direct, non-app access)
+create_rule "db ddl or role change" '{
+  "rule_id": "library-db-ddl-role",
+  "name": "Database DDL or role change",
+  "description": "pgaudit logged a DDL/ROLE statement (CREATE/ALTER/DROP, GRANT...). Normal only during migrations.",
+  "type": "query",
+  "language": "kuery",
+  "query": "message:\"AUDIT\" and message:(DDL or ROLE)",
+  "index": ["library-logs-*"],
+  "from": "now-5m",
+  "interval": "5m",
+  "severity": "medium",
+  "risk_score": 47,
+  "enabled": true
+}'
+
+# 8. Reverse proxy - path scanning (many 404s from one IP)
+create_rule "nginx path scanning" '{
+  "rule_id": "library-nginx-scan",
+  "name": "Path scanning via reverse proxy",
+  "description": "20+ HTTP 404 from the same IP within 5 minutes - directory/endpoint enumeration.",
+  "type": "threshold",
+  "language": "kuery",
+  "query": "app:\"nginx\" and status:404",
+  "threshold": {"field": ["ip"], "value": 20},
+  "index": ["library-logs-*"],
+  "from": "now-5m",
+  "interval": "5m",
+  "severity": "medium",
+  "risk_score": 47,
+  "enabled": true
+}'

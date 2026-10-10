@@ -39,7 +39,25 @@ filebeat.autodiscover:
               json.keys_under_root: true
               json.add_error_key: true
 
+# Host-level logs (infra side, not app): SSH/sudo/login authentication and
+# auditd (file/exec/user-change syscalls). /var/log of the host is mounted at
+# /host/var/log (see compose files). Missing files are fine - the input just
+# idles until auditd/rsyslog creates them. Not JSON, so they land in `message`.
+# `log_source` (not `log`/`event`: ECS-reserved objects) tells them apart.
+filebeat.inputs:
+  - type: filestream
+    id: host-auth
+    paths: ["/host/var/log/auth.log", "/host/var/log/secure"]
+    fields_under_root: true
+    fields: {log_source: host_auth}
+  - type: filestream
+    id: host-audit
+    paths: ["/host/var/log/audit/audit.log"]
+    fields_under_root: true
+    fields: {log_source: host_audit}
+
 processors:
+  - add_host_metadata: ~
   - add_docker_metadata: ~
 
 # ELK, not just EK: ship to Logstash (beats protocol), not straight to

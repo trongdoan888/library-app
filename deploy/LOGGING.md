@@ -80,6 +80,58 @@ ELASTIC_PASSWORD=$(grep ELASTIC_PASSWORD .env | cut -d= -f2) \
 Một alert kích hoạt = 1 sự kiện cần xem lại, không tự kết luận là tấn công
 (đúng mục X).
 
+## Log hạ tầng host (authen + audit)
+
+Log app (Access/CRUD) chỉ là lớp ứng dụng; hạ tầng cần thêm log của **chính
+máy host**. Filebeat (cả 3 VM) mount `/var/log` của host → `/host/var/log` và
+đọc thêm 2 nguồn, gắn field `log_source`:
+
+- `host_auth` — `/var/log/auth.log` (Ubuntu/Debian) hoặc `/var/log/secure`: SSH
+  login/fail, sudo, su.
+- `host_audit` — `/var/log/audit/audit.log` (auditd): ai sửa file/user/sudoers, exec.
+
+Cài auditd trên **mỗi VM** (1 lần), file chưa có thì input chỉ nằm chờ:
+```bash
+sudo apt install -y auditd
+echo '-w /etc/passwd -p wa -k lib_audit
+-w /etc/shadow -p wa -k lib_audit
+-w /etc/sudoers -p wa -k lib_audit
+-w /etc/ssh/sshd_config -p wa -k lib_audit
+-w /var/run/docker.sock -p rw -k lib_audit' | sudo tee /etc/audit/rules.d/library.rules
+sudo augenrules --load
+```
+Kibana: `log_source: host_auth and message: "Failed password"` = brute-force SSH.
+Rule `library-host-ssh-bruteforce` và `library-host-sensitive-file` (key `lib_audit`) trong `create-detection-rules.sh` bám vào 2 nguồn này.
+
+### Audit DB (pgaudit) và nginx
+
+- pg-0/pg-1 bật `POSTGRESQL_PGAUDIT_LOG=ddl,role` (image bitnami có sẵn pgaudit):
+  mọi CREATE/ALTER/DROP và GRANT/CREATE ROLE ra stdout dạng `AUDIT: SESSION,...`,
+  kể cả khi vào thẳng DB không qua app. Rule `library-db-ddl-role`. Kiểm tra sau
+  khi `up -d` lại: `docker exec library_pg0 psql -U postgres -c "SHOW shared_preload_libraries"`
+  phải có `pgaudit`. Không bật `write`/`read` (quá ồn, lộ giá trị) và không bật
+  `log_connections` (health check pgpool 10s/lần).
+- Rule `library-nginx-scan`: 20+ HTTP 404 / IP / 5 phút.
+- Retention: `es-setup` tạo ILM policy `library-logs` (xóa index sau 30 ngày) +
+  index template chỉ chứa setting lifecycle (không mapping, nên không lặp lại lỗi
+  ECS). Chỉ áp cho index tạo SAU khi es-setup chạy; index cũ xóa tay.
+
+### Kiểm thử end-to-end (chạy sau khi deploy, đây là bước chưa ai chạy)
+
+```bash
+# VM bất kỳ: authen
+for i in 1 2 3 4 5 6; do ssh -o PreferredAuthentications=password fake@localhost true; done
+# audit file nhạy cảm
+sudo touch /etc/sudoers && sudo auditctl -l | grep lib_audit
+# DB audit (VM1, qua pgpool)
+docker exec -e PGPASSWORD=$POSTGRES_PASSWORD library_pgpool psql -h localhost -U $POSTGRES_USER $POSTGRES_DB -c "CREATE TABLE zz_audit_test(i int); DROP TABLE zz_audit_test;"
+# nginx scan
+for i in $(seq 25); do curl -s -o /dev/null http://localhost/nope$i; done
+```
+Kibana Discover (`library-logs-*`): `log_source:host_auth`, `log_source:host_audit`,
+`message:AUDIT`, `app:nginx and status:404`; sau ≤5 phút Security → Alerts phải
+có 4 rule tương ứng. Chạy lại `create-detection-rules.sh` để nạp rule mới.
+
 ## Cấu trúc field trong log (để build Discover/Dashboard)
 
 Từ `backend_library/api/logging_json.py` + `api/audit.py`:
@@ -129,14 +181,14 @@ self-test `JsonFormatter` (field `extra` của LogRecord — nơi Django có th�
 
 ## Giới hạn đã biết (ponytail)
 
-- Không bật ILM (Logstash `manage_template => false`, không cấu hình policy nào)
-  → index `library-logs-*` phình vô hạn. Thêm ILM policy khi ổ đĩa VM1 bắt đầu căng.
+- ILM chỉ có delete sau 30 ngày (không rollover/warm tiers) — đủ cho 1 index/ngày.
 - Logstash không filter/transform gì (Filebeat đã parse JSON sẵn) — chỉ đóng
   vai trò trung chuyển đúng chuẩn ELK. Nếu sau này cần enrich/filter dữ liệu
   (geoip theo `ip`, drop field nhạy cảm...), đây là chỗ thêm, không phải sửa
   Filebeat hay Django.
-- Elasticsearch/Kibana không bật TLS giữa các container/VM (chỉ basic auth) —
-  chấp nhận được vì chỉ chạy trong LAN nội bộ 3 VM, không expose Internet.
+- KHÔNG có TLS giữa các container/VM (chỉ basic auth): log đi plaintext qua LAN
+  trên cổng 5044/9200. Chấp nhận trong LAN nội bộ; nếu cần: Logstash `ssl_enabled`
+  + `ssl_certificate/key` ở input beats, Filebeat `output.logstash.ssl.certificate_authorities`.
 - pgpool/pg-witness KHÔNG có Filebeat riêng (chạy trên VM1, đã được Filebeat
   chung của VM1 thu qua Docker autodiscover) — chỉ pg-0/pg-1 (VM2/VM3) cần
   Filebeat riêng vì khác máy vật lý.
