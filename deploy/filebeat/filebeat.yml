@@ -30,8 +30,14 @@ filebeat.autodiscover:
               - contains:
                   docker.container.name: "library_"
               - not:
-                  contains:
-                    docker.container.name: "filebeat"
+                  or:
+                    - contains:
+                        docker.container.name: "filebeat"
+                    # Logstash too: it logs every failed ES write to stdout, Filebeat
+                    # ships that line to Logstash, which fails and logs again... seen
+                    # in production: one 19GB json.log in a few hours.
+                    - contains:
+                        docker.container.name: "logstash"
           config:
             - type: container
               paths:

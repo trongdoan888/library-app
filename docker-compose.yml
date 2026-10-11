@@ -8,6 +8,12 @@
 # Các node repmgr (pg-0/pg-1/pg-witness) chạy network_mode: host — nối nhau
 # qua IP tĩnh + cổng 5432 thật của mỗi VM, không qua NAT publish của Docker
 # (tránh lỗi hairpin khi 1 node tự kết nối tới chính IP của nó).
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
 
   # --- repmgr witness: chỉ bỏ phiếu khi failover, không chứa dữ liệu ứng dụng ---
@@ -17,6 +23,7 @@ services:
   pg-witness:
     image: bitnamilegacy/postgresql-repmgr:16.6.0
     container_name: library_pg_witness
+    logging: *default-logging
     network_mode: host
     env_file:
       - .env
@@ -44,6 +51,7 @@ services:
   pgpool:
     image: bitnamilegacy/pgpool:4.6.3
     container_name: library_pgpool
+    logging: *default-logging
     env_file:
       - .env
     environment:
@@ -81,6 +89,7 @@ services:
   pgadmin:
     image: dpage/pgadmin4:snapshot
     container_name: library_pgadmin
+    logging: *default-logging
     restart: always
     env_file:
       - .env
@@ -98,6 +107,7 @@ services:
       context: ./deploy/backup
     image: library-pg-backup:latest
     container_name: library_pg_backup
+    logging: *default-logging
     env_file:
       - .env
     environment:
@@ -117,6 +127,7 @@ services:
       context: ./backend_library
       dockerfile: Dockerfile
     container_name: library_backend
+    logging: *default-logging
     env_file:
       - .env
     environment:
@@ -137,6 +148,7 @@ services:
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
     container_name: library_frontend
+    logging: *default-logging
     # Không publish port 3000 ra host nữa - chỉ nginx gọi tới qua "frontend:3000".
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
@@ -153,6 +165,7 @@ services:
   nginx:
     image: nginx:1.27-alpine
     container_name: library_nginx
+    logging: *default-logging
     volumes:
       - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     ports:
@@ -170,6 +183,7 @@ services:
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
     container_name: library_elasticsearch
+    logging: *default-logging
     env_file:
       - .env
     environment:
@@ -195,6 +209,7 @@ services:
   es-setup:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
     container_name: library_es_setup
+    logging: *default-logging
     env_file:
       - .env
     depends_on:
@@ -222,6 +237,7 @@ services:
   logstash:
     image: docker.elastic.co/logstash/logstash:8.15.3
     container_name: library_logstash
+    logging: *default-logging
     env_file:
       - .env
     environment:
@@ -238,6 +254,7 @@ services:
   kibana:
     image: docker.elastic.co/kibana/kibana:8.15.3
     container_name: library_kibana
+    logging: *default-logging
     env_file:
       - .env
     environment:
@@ -257,6 +274,7 @@ services:
   filebeat:
     image: docker.elastic.co/beats/filebeat:8.15.3
     container_name: library_filebeat
+    logging: *default-logging
     user: root
     # filebeat.yml is bind-mounted from the git checkout (owned by the VM's
     # login user, not root) - Beats refuses to start otherwise ("config file

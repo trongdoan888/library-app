@@ -4,10 +4,17 @@
 # Bật SAU pg-0 (VM2). Container sẽ tự pg_basebackup từ pg-0 rồi chạy standby.
 # network_mode: host — tránh NAT-hairpin khi repmgrd tự kết nối tới chính mình
 # qua REPMGR_NODE_NETWORK_NAME (xem giải thích trong docker-compose.pg0.yml).
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   pg-1:
     image: bitnamilegacy/postgresql-repmgr:16.6.0
     container_name: library_pg1
+    logging: *default-logging
     network_mode: host
     env_file:
       - .env
@@ -38,6 +45,7 @@ services:
   filebeat:
     image: docker.elastic.co/beats/filebeat:8.15.3
     container_name: library_filebeat_pg1
+    logging: *default-logging
     user: root
     command: ["-e", "--strict.perms=false"]
     env_file:

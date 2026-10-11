@@ -7,10 +7,17 @@
 # NAT/bridge + iptables) không xử lý được -> container crash-loop liên tục dù
 # node khác nối vào vẫn bình thường. host mode bỏ hẳn NAT của Docker cho node
 # này: bind thẳng vào cổng 5432 thật của VM, không cần "ports:" nữa.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   pg-0:
     image: bitnamilegacy/postgresql-repmgr:16.6.0
     container_name: library_pg0
+    logging: *default-logging
     network_mode: host
     env_file:
       - .env
@@ -42,6 +49,7 @@ services:
   filebeat:
     image: docker.elastic.co/beats/filebeat:8.15.3
     container_name: library_filebeat_pg0
+    logging: *default-logging
     user: root
     # filebeat.yml bind-mount từ git checkout (owner = user VM, không phải
     # root) -> Beats chặn khởi động nếu không có cờ này (xem docker-compose.yml).
