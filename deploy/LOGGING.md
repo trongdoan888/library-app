@@ -112,9 +112,13 @@ Rule `library-host-ssh-bruteforce` và `library-host-sensitive-file` (key `lib_a
   phải có `pgaudit`. Không bật `write`/`read` (quá ồn, lộ giá trị) và không bật
   `log_connections` (health check pgpool 10s/lần).
 - Rule `library-nginx-scan`: 20+ HTTP 404 / IP / 5 phút.
-- Retention: `es-setup` tạo ILM policy `library-logs` (xóa index sau 30 ngày) +
-  index template chỉ chứa setting lifecycle (không mapping, nên không lặp lại lỗi
-  ECS). Chỉ áp cho index tạo SAU khi es-setup chạy; index cũ xóa tay.
+- Retention: `library-logs-*` là **data stream** (do Logstash tạo, mỗi ngày 1
+  stream), nên dùng data stream lifecycle chứ không dùng ILM policy. `es-setup`
+  tạo template `library-logs-retention` (priority 500, `data_retention: 30d`) và
+  áp luôn cho các stream đã có. Template này ghi đè template `library-logs` do
+  Logstash tạo, nên mapping do ES tự suy luận (đúng ý định ban đầu). Mỗi stream
+  chỉ có 1 backing index và rollover mặc định sau 30 ngày, nên log thực tế sống
+  tối đa ~60 ngày.
 
 ### Kiểm thử end-to-end (chạy sau khi deploy, đây là bước chưa ai chạy)
 
@@ -181,7 +185,7 @@ self-test `JsonFormatter` (field `extra` của LogRecord — nơi Django có th�
 
 ## Giới hạn đã biết (ponytail)
 
-- ILM chỉ có delete sau 30 ngày (không rollover/warm tiers) — đủ cho 1 index/ngày.
+- Retention bằng data stream lifecycle 30 ngày (thực tế tối đa ~60 ngày, xem trên).
 - Logstash không filter/transform gì (Filebeat đã parse JSON sẵn) — chỉ đóng
   vai trò trung chuyển đúng chuẩn ELK. Nếu sau này cần enrich/filter dữ liệu
   (geoip theo `ip`, drop field nhạy cảm...), đây là chỗ thêm, không phải sửa
