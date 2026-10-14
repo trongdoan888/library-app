@@ -9,7 +9,7 @@ cũng nằm trong pipeline (xem "VM2/VM3" bên dưới).
 nữa mà gửi qua giao thức beats tới Logstash (`deploy/logstash/logstash.conf`,
 cổng 5044), Logstash mới là thành phần nói chuyện với Elasticsearch. Filebeat parse JSON (backend/nginx); Logstash parse nốt log dạng text bằng
 `grok`/`kv`: `host-auth` → `ssh_result`, `ssh_method`, `target_user`, `src_ip`,
-`src_port`; `host-audit` → `audit_type/key/exe/comm/auid/uid/success`;
+`src_port`, và sudo/su → `priv_tool`, `priv_user`, `priv_target`, `priv_result`, `priv_command`; `host-audit` → `audit_type/key/exe/comm/auid/uid/success`;
 `postgres-audit` → `audit_class/command/object_type/object` (không tách câu
 lệnh SQL vì có thể chứa giá trị nhạy cảm). Dòng không khớp vẫn giữ nguyên ở
 `message`. Rule SSH brute-force giờ đếm theo `src_ip`; chạy lại

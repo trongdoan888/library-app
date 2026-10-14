@@ -129,7 +129,7 @@ create_rule "host sensitive file change" '{
   "description": "auditd watch lib_audit fired: /etc/passwd, /etc/shadow, /etc/sudoers, sshd_config or docker.sock.",
   "type": "query",
   "language": "kuery",
-  "query": "log_source:\"host_audit\" and message:\"lib_audit\"",
+  "query": "log_source:\"host_audit\" and audit_key:\"lib_audit\"",
   "index": ["library-logs-*"],
   "from": "now-5m",
   "interval": "5m",
