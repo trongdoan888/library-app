@@ -103,16 +103,17 @@ create_rule "user resource change" '{
   "enabled": true
 }'
 
-# 5. Host Authentication - SSH brute force (auth.log is unparsed text, so the
-# threshold groups by host, not by source IP)
+# 5. Host Authentication - SSH brute force, grouped by source IP (parsed by
+# Logstash grok). Old version grouped by host; delete it so this one replaces it.
+curl -s -o /dev/null -u "elastic:${ELASTIC_PASSWORD}" -H 'kbn-xsrf: true'   -X DELETE "$KIBANA_URL/api/detection_engine/rules?rule_id=library-host-ssh-bruteforce" || true
 create_rule "host ssh brute-force" '{
   "rule_id": "library-host-ssh-bruteforce",
   "name": "SSH brute-force on host",
-  "description": "5+ failed SSH passwords on the same host within 5 minutes.",
+  "description": "5+ failed SSH logins from the same source IP within 5 minutes.",
   "type": "threshold",
   "language": "kuery",
-  "query": "log_source:\"host_auth\" and message:\"Failed password\"",
-  "threshold": {"field": ["host.name"], "value": 5},
+  "query": "log_source:\"host_auth\" and ssh_result:\"Failed\"",
+  "threshold": {"field": ["src_ip"], "value": 5},
   "index": ["library-logs-*"],
   "from": "now-5m",
   "interval": "5m",

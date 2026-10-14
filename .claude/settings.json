@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(POSTGRES_HOST=localhost ../.venv/Scripts/python.exe manage.py check)",
+      "Bash(POSTGRES_HOST=localhost ../.venv/Scripts/python.exe -c ' *)",
+      "Bash(backend_library/.venv/Scripts/python.exe -c ' *)"
+    ]
+  }
+}

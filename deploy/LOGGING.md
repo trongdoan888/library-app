@@ -7,15 +7,28 @@ cũng nằm trong pipeline (xem "VM2/VM3" bên dưới).
 
 **ELK đúng nghĩa** (không chỉ "EK"): Filebeat không gửi thẳng tới Elasticsearch
 nữa mà gửi qua giao thức beats tới Logstash (`deploy/logstash/logstash.conf`,
-cổng 5044), Logstash mới là thành phần nói chuyện với Elasticsearch. Không có
-filter nào ở Logstash — Filebeat đã parse JSON trước khi gửi — nên đây chỉ là
-1 trạm trung chuyển, nhưng đúng vai trò "L" trong ELK.
+cổng 5044), Logstash mới là thành phần nói chuyện với Elasticsearch. Filebeat parse JSON (backend/nginx); Logstash parse nốt log dạng text bằng
+`grok`/`kv`: `host-auth` → `ssh_result`, `ssh_method`, `target_user`, `src_ip`,
+`src_port`; `host-audit` → `audit_type/key/exe/comm/auid/uid/success`;
+`postgres-audit` → `audit_class/command/object_type/object` (không tách câu
+lệnh SQL vì có thể chứa giá trị nhạy cảm). Dòng không khớp vẫn giữ nguyên ở
+`message`. Rule SSH brute-force giờ đếm theo `src_ip`; chạy lại
+`create-detection-rules.sh` (nó xoá rule cũ rồi tạo lại).
 
 Elasticsearch + Kibana chỉ chạy **1 nơi duy nhất: VM1** (`docker-compose.yml`).
 VM2 (pg-0) và VM3 (pg-1) mỗi máy chạy thêm 1 Filebeat riêng, gửi log qua LAN
 về Elasticsearch trên VM1 — vì Docker log của 1 container chỉ đọc được từ máy
 vật lý đang chạy nó (`/var/lib/docker/containers` là local disk), không có
 Filebeat trung tâm nào "nhìn xuyên" 3 VM được.
+
+**Mỗi loại log 1 index (data stream) riêng**: Logstash gán `[@metadata][kind]`
+rồi ghi vào `library-logs-<kind>-YYYY.MM.dd`, với `kind` = `backend-auth` |
+`backend-access` | `backend-audit` | `backend-other` | `nginx` | `host-auth` |
+`host-audit` | `postgres` | `postgres-audit` | `pgpool` | `other`. Vẫn khớp
+`library-logs-*` nên data view, retention và detection rules không đổi. Kiểm tra:
+`curl -s -u elastic:$A 'localhost:9200/_cat/data_streams/library-logs-*?v'`.
+Đổi `logstash.conf` phải `docker compose restart logstash`. Data stream cũ
+`library-logs-YYYY.MM.dd` (gộp chung) vẫn còn đến khi hết retention.
 
 ## Yêu cầu trước khi chạy
 
@@ -97,9 +110,10 @@ echo '-w /etc/passwd -p wa -k lib_audit
 -w /etc/shadow -p wa -k lib_audit
 -w /etc/sudoers -p wa -k lib_audit
 -w /etc/ssh/sshd_config -p wa -k lib_audit
--w /var/run/docker.sock -p rw -k lib_audit' | sudo tee /etc/audit/rules.d/library.rules
+-w /var/run/docker.sock -p wa -k lib_audit' | sudo tee /etc/audit/rules.d/library.rules
 sudo augenrules --load
 ```
+`docker.sock` dùng `-p wa` (ghi/đổi thuộc tính), không dùng `rw`: `rw` ghi lại mọi lần Filebeat/`docker ps` mở socket (thực tế ~6.000 event/giờ), làm rule báo động liên tục.
 Kibana: `log_source: host_auth and message: "Failed password"` = brute-force SSH.
 Rule `library-host-ssh-bruteforce` và `library-host-sensitive-file` (key `lib_audit`) trong `create-detection-rules.sh` bám vào 2 nguồn này.
 
