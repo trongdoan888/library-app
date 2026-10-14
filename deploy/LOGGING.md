@@ -26,7 +26,7 @@ rồi ghi vào `library-logs-<kind>-YYYY.MM.dd`, với `kind` = `backend-auth` |
 `backend-access` | `backend-audit` | `backend-other` | `nginx` | `host-auth` |
 `host-audit` | `postgres` | `postgres-audit` | `pgpool` | `other`. Vẫn khớp
 `library-logs-*` nên data view, retention và detection rules không đổi. Kiểm tra:
-`curl -s -u elastic:$A 'localhost:9200/_cat/data_streams/library-logs-*?v'`.
+`curl -s -u elastic:$A 'localhost:9200/_data_stream/library-logs-*?filter_path=data_streams.name'`.
 Đổi `logstash.conf` phải `docker compose restart logstash`. Data stream cũ
 `library-logs-YYYY.MM.dd` (gộp chung) vẫn còn đến khi hết retention.
 
