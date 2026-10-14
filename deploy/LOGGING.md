@@ -163,7 +163,9 @@ Từ `backend_library/api/logging_json.py` + `api/audit.py`:
 | `actor`, `user_id` | actor đang đăng nhập tại thời điểm log (JWT auth) — tên `actor` không phải `user` vì lý do tương tự `app`/`service` |
 | `username` | (chỉ ở event login) tài khoản đang thử đăng nhập — khác `actor` vì lúc đó chưa auth xong |
 | `method`, `endpoint`, `status`, `duration_ms`, `ip` | Access log (mọi request) |
-| `resource`, `resource_id` | Audit/CRUD log — tên model + pk, **không** log giá trị field |
+| `resource`, `resource_id` | Audit/CRUD log — tên model + pk |
+| `changes` | (chỉ update) mảng chuỗi `"field: cũ -> mới"` do pre_save so sánh với DB; bỏ field `password`, `content` |
+| `reason`, `count` | `Borrow` `sync_overdue` (bulk_update không phát signal nên log tay) |
 | `message` | log dạng string thường (Django `django.request`/`django.security`, không phải JSON) |
 
 Log của postgres/pgpool/pgadmin không phải JSON nên rơi vào field `message`
@@ -200,10 +202,7 @@ self-test `JsonFormatter` (field `extra` của LogRecord — nơi Django có th�
 ## Giới hạn đã biết (ponytail)
 
 - Retention bằng data stream lifecycle 30 ngày (thực tế tối đa ~60 ngày, xem trên).
-- Logstash không filter/transform gì (Filebeat đã parse JSON sẵn) — chỉ đóng
-  vai trò trung chuyển đúng chuẩn ELK. Nếu sau này cần enrich/filter dữ liệu
-  (geoip theo `ip`, drop field nhạy cảm...), đây là chỗ thêm, không phải sửa
-  Filebeat hay Django.
+- Logstash chỉ làm 2 việc: gán `kind` (index riêng) và grok/kv log text (host-auth, host-audit, pgaudit). Chưa có enrich (geoip theo `ip`, drop field nhạy cảm...) — đây là chỗ thêm, không phải sửa Filebeat hay Django.
 - KHÔNG có TLS giữa các container/VM (chỉ basic auth): log đi plaintext qua LAN
   trên cổng 5044/9200. Chấp nhận trong LAN nội bộ; nếu cần: Logstash `ssl_enabled`
   + `ssl_certificate/key` ở input beats, Filebeat `output.logstash.ssl.certificate_authorities`.
