@@ -38,4 +38,4 @@ processors:
 
 output.logstash:
 
-  hosts: ["${LOGSTASH_HOST:logstash:5044}"]
+  hosts: ["logstash:5044"]
