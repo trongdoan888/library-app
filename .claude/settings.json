@@ -3,7 +3,13 @@
     "allow": [
       "Bash(POSTGRES_HOST=localhost ../.venv/Scripts/python.exe manage.py check)",
       "Bash(POSTGRES_HOST=localhost ../.venv/Scripts/python.exe -c ' *)",
-      "Bash(backend_library/.venv/Scripts/python.exe -c ' *)"
+      "Bash(backend_library/.venv/Scripts/python.exe -c ' *)",
+      "Bash(git check-ignore *)",
+      "Bash(mkdir -p \"C:/Users/doant/AppData/Local/Temp/claude/c--Users-doant-OneDrive-Documents-Desktop-library-app/1a5b40d2-2d8e-4871-9526-e0ba8c58a41a/scratchpad/work\")",
+      "Bash(cp \"C:/Users/doant/Downloads/Logging__Security_Monitoring___Library_App_v2 \\(3\\).pptx\" \"C:/Users/doant/AppData/Local/Temp/claude/c--Users-doant-OneDrive-Documents-Desktop-library-app/1a5b40d2-2d8e-4871-9526-e0ba8c58a41a/scratchpad/work/orig.pptx\")",
+      "Bash(python -m markitdown \"C:/Users/doant/AppData/Local/Temp/claude/c--Users-doant-OneDrive-Documents-Desktop-library-app/1a5b40d2-2d8e-4871-9526-e0ba8c58a41a/scratchpad/work/orig.pptx\")",
+      "Bash(python -c \"import pptx;print\\(pptx.__version__\\)\")",
+      "Bash(python -I -c ' *)"
     ]
   }
 }

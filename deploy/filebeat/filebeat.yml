@@ -1,41 +1,16 @@
-# Autodiscover every container in this compose project and ship its stdout.
-# backend/frontend logs come out as one JSON object per line (Django's
-# JsonFormatter, see backend_library/api/logging_json.py) and get parsed
-# straight into fields; postgres/pgpool/pgadmin logs aren't JSON, so the
-# parse fails silently and they land in `message` instead - both are fine.
+
 filebeat.autodiscover:
   providers:
     - type: docker
-      # Template-based matching (condition below), NOT hints-based - the two
-      # modes are mutually exclusive in practice: with hints.enabled, Filebeat
-      # only looks at per-container `co.elastic.logs/*` labels and silently
-      # ignores `templates` entirely (no error, just 0 harvesters started).
-      #
-      # Match on container name, not the compose-project label: the label
-      # key has literal dots (`com.docker.compose.project`), and depending
-      # on the beats version's `labels.dedot` default those dots either get
-      # collapsed to `_` or create 5 levels of nested fields - either way the
-      # flat path below silently matches nothing. Every service here is
-      # named "library_*" (see container_name: in the compose files), so
-      # matching on that avoids the dot ambiguity entirely.
-      # Exclude filebeat's own container(s): harvesting your own log shipper's
-      # stdout is a self-feedback loop (it logs about shipping events, which
-      # gets harvested, which gets shipped and logged about again...). Its
-      # metrics log lines are also large enough that the JSON parser chokes
-      # on fragments of them, flooding the index with "Error decoding JSON"
-      # noise (seen in production: 10k+ junk docs in under a day).
       templates:
         - condition:
             and:
               - contains:
                   docker.container.name: "library_"
-              - not:
+              - not:                                                                                              
                   or:
                     - contains:
                         docker.container.name: "filebeat"
-                    # Logstash too: it logs every failed ES write to stdout, Filebeat
-                    # ships that line to Logstash, which fails and logs again... seen
-                    # in production: one 19GB json.log in a few hours.
                     - contains:
                         docker.container.name: "logstash"
           config:
@@ -45,11 +20,6 @@ filebeat.autodiscover:
               json.keys_under_root: true
               json.add_error_key: true
 
-# Host-level logs (infra side, not app): SSH/sudo/login authentication and
-# auditd (file/exec/user-change syscalls). /var/log of the host is mounted at
-# /host/var/log (see compose files). Missing files are fine - the input just
-# idles until auditd/rsyslog creates them. Not JSON, so they land in `message`.
-# `log_source` (not `log`/`event`: ECS-reserved objects) tells them apart.
 filebeat.inputs:
   - type: filestream
     id: host-auth
@@ -66,11 +36,6 @@ processors:
   - add_host_metadata: ~
   - add_docker_metadata: ~
 
-# ELK, not just EK: ship to Logstash (beats protocol), not straight to
-# Elasticsearch. Logstash (deploy/logstash/logstash.conf) is the one that
-# talks to Elasticsearch from here on.
 output.logstash:
-  # VM1 reaches Logstash by the compose service name; VM2/VM3 (pg-0/pg-1,
-  # separate compose files/hosts) set LOGSTASH_HOST=${VM1_IP}:5044 to reach
-  # it over the LAN.
+
   hosts: ["${LOGSTASH_HOST:logstash:5044}"]
