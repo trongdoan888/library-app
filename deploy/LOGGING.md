@@ -199,6 +199,40 @@ self-test `JsonFormatter` (field `extra` của LogRecord — nơi Django có th�
   điểm so sánh SHA. Luôn `docker compose build backend` tay sau khi biết chắc
   code backend đổi, đừng chỉ tin gitops khi đang can thiệp thủ công song song.
 
+## Suricata (IDS/IPS)
+
+**Luồng log:** Suricata (alert `eve.json`), Nginx và Django cùng đổ vào ELK qua
+Filebeat -> Logstash. Suricata nối với Nginx bằng `ip` + `uri` + thời gian;
+Nginx nối với Django bằng `request_id` (nginx sinh `$request_id`, gửi sang
+Django qua header `X-Request-ID`). Django ghi thêm `actor` nên truy ra tài
+khoản gây request. Suricata chỉ ghi alert vào data stream
+`library-logs-suricata-*`, toàn bộ field nằm dưới `suricata.*`.
+
+**Bật (mặc định chỉ IDS):**
+
+```bash
+# .env trên VM1: SURICATA_IFACE=<card mạng, xem `ip -br a`>
+docker compose up -d suricata
+```
+
+Rule nằm ở `deploy/suricata/rules/local.rules`; `HOME_NET` và `interface`
+chỉnh trong `deploy/suricata/suricata.yaml`.
+
+**Chuyển sang IPS (inline):**
+
+1. Đổi `alert` thành `drop` ở các rule muốn chặn trong `local.rules`.
+2. Đưa gói vào NFQUEUE:
+   ```bash
+   sudo iptables -I INPUT -p tcp --dport 80 -j NFQUEUE --queue-num 0 --queue-bypass
+   sudo iptables -I FORWARD -p tcp --dport 80 -j NFQUEUE --queue-num 0 --queue-bypass
+   ```
+3. Đổi `command` của service `suricata` thành `-c /etc/suricata/suricata.yaml -q 0`.
+4. Hoàn tác: chạy lại đúng 2 lệnh iptables trên với `-D` thay `-I`, rồi trả `command` về `-i ${SURICATA_IFACE}`.
+
+Lưu ý: khi gói bị chặn thì Nginx và Django **không có log** của request đó,
+chỉ còn alert của Suricata. Với Suricata 7+, sự kiện chặn nằm ở
+`suricata.alert.action: "blocked"`.
+
 ## Giới hạn đã biết (ponytail)
 
 - Retention bằng data stream lifecycle 30 ngày (thực tế tối đa ~60 ngày, xem trên).

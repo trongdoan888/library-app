@@ -31,11 +31,24 @@ filebeat.inputs:
     paths: ["/host/var/log/audit/audit.log"]
     fields_under_root: true
     fields: {log_source: host_audit}
+  - type: filestream
+    id: suricata-eve
+    paths: ["/var/log/suricata/eve.json"]
+    parsers:
+      - ndjson:
+          target: "suricata"
+          add_error_key: true
+    fields_under_root: true
+    fields: {log_source: suricata_ids}
+    processors:
+      - drop_event:
+          when.not.equals:
+            suricata.event_type: alert
 
 processors:
   - add_host_metadata: ~
   - add_docker_metadata: ~
 
 output.logstash:
-
-  hosts: ["logstash:5044"]
+  # VM2/VM3 set LOGSTASH_HOST=${VM1_IP}:5044; VM1 defaults to the compose service.
+  hosts: ["${LOGSTASH_HOST:logstash:5044}"]

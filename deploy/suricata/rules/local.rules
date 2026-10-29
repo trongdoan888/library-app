@@ -1,0 +1,6 @@
+alert http any any -> $HOME_NET any (msg:"[OWASP-A03] SQL Injection"; flow:established,to_server; http.uri; pcre:"/(union(?:\s|\+|%20)+select|(?:\x27|%27)(?:\s|\+|%20)*(?:or|and|union)\b|(?:\s|\+|%20)or(?:\s|\+|%20)+1(?:\s|\+|%20)*=(?:\s|\+|%20)*1)/i"; classtype:web-application-attack; sid:1000001; rev:1;)
+alert http any any -> $HOME_NET any (msg:"[OWASP-A03] XSS script tag"; flow:established,to_server; content:"<script"; nocase; classtype:web-application-attack; sid:1000002; rev:1;)
+alert http any any -> $HOME_NET any (msg:"[OWASP-A03] XSS in URI"; flow:established,to_server; http.uri; pcre:"/(<|%3c)script/i"; classtype:web-application-attack; sid:1000003; rev:1;)
+alert http any any -> $HOME_NET any (msg:"[OWASP-A01] Path Traversal"; flow:established,to_server; http.uri; pcre:"/(\.\.\/|\.\.%2f|%2e%2e|\/etc\/passwd)/i"; classtype:web-application-attack; sid:1000004; rev:1;)
+alert http any any -> $HOME_NET any (msg:"[OWASP-A05] Scanner tool"; flow:established,to_server; http.user_agent; pcre:"/(sqlmap|nikto|nmap)/i"; classtype:web-application-activity; sid:1000005; rev:1;)
+alert http any any -> $HOME_NET any (msg:"[OWASP-A07] Brute force login"; flow:established,to_server; http.method; content:"POST"; http.uri; content:"/api/token"; threshold:type both, track by_src, count 5, seconds 10; classtype:attempted-user; sid:1000006; rev:1;)

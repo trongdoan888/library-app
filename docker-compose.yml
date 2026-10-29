@@ -175,6 +175,19 @@ services:
       - frontend
     restart: always
 
+  suricata:
+    image: jasonish/suricata:7.0
+    container_name: suricata_ids
+    logging: *default-logging
+    network_mode: host
+    cap_add: [NET_ADMIN, NET_RAW, SYS_NICE]
+    command: -c /etc/suricata/suricata.yaml -i ${SURICATA_IFACE:-eth0}
+    volumes:
+      - ./deploy/suricata/suricata.yaml:/etc/suricata/suricata.yaml:ro
+      - ./deploy/suricata/rules:/etc/suricata/rules:ro
+      - suricata_logs:/var/log/suricata
+    restart: always
+
   # --- Log pipeline: Filebeat ships every container's stdout to Elasticsearch,
   # Kibana visualizes it, Elastic Security runs detection rules on top.
   # ponytail: single ES node, no TLS between containers (internal docker
@@ -245,6 +258,7 @@ services:
     volumes:
       - ./deploy/logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
       - ./deploy/logstash/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
+      
     ports:
       - "5044:5044"
     depends_on:
@@ -291,6 +305,7 @@ services:
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /var/log:/host/var/log:ro
+      - suricata_logs:/var/log/suricata:ro
     depends_on:
       logstash:
         condition: service_started
@@ -300,6 +315,7 @@ volumes:
   pg_witness_data:
   pgadmin_data:
   es_data:
+  suricata_logs:
 
   # Thư mục trên máy thật Windows, chia sẻ qua SMB.
   # Trên Windows: share thư mục C:\Users\doant\OneDrive\Documents\Desktop\pg-backups
