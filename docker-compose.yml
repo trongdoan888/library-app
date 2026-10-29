@@ -181,6 +181,8 @@ services:
     logging: *default-logging
     network_mode: host
     cap_add: [NET_ADMIN, NET_RAW, SYS_NICE]
+    # Bo qua entrypoint cua image: no chown /etc/suricata, fail voi mount :ro.
+    entrypoint: ["suricata"]
     command: -c /etc/suricata/suricata.yaml -i ${SURICATA_IFACE:-eth0}
     volumes:
       - ./deploy/suricata/suricata.yaml:/etc/suricata/suricata.yaml:ro
