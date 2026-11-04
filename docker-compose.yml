@@ -183,7 +183,8 @@ services:
     cap_add: [NET_ADMIN, NET_RAW, SYS_NICE]
     # Bo qua entrypoint cua image: no chown /etc/suricata, fail voi mount :ro.
     entrypoint: ["suricata"]
-    command: -c /etc/suricata/suricata.yaml -i ${SURICATA_IFACE:-eth0}
+    # IDS mac dinh (-i); IPS: dat SURICATA_ARGS="-q 0" trong .env (xem deploy/LOGGING.md).
+    command: -c /etc/suricata/suricata.yaml ${SURICATA_ARGS:--i ${SURICATA_IFACE:-eth0}}
     volumes:
       - ./deploy/suricata/suricata.yaml:/etc/suricata/suricata.yaml:ro
       - ./deploy/suricata/rules:/etc/suricata/rules:ro

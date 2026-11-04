@@ -220,14 +220,23 @@ chỉnh trong `deploy/suricata/suricata.yaml`.
 
 **Chuyển sang IPS (inline):**
 
-1. Đổi `alert` thành `drop` ở các rule muốn chặn trong `local.rules`.
-2. Đưa gói vào NFQUEUE:
+1. Rule 1000004 (Path Traversal) và 1000005 (Scanner) đã là `drop` sẵn; ở chế độ IDS
+   `drop` chỉ ghi alert. Muốn chặn thêm rule nào thì đổi `alert` thành `drop`
+   (chỉ chọn rule ít false positive; 1000001 và 1000006 dễ chặn nhầm).
+2. Đưa gói vào NFQUEUE. Nginx chạy trong Docker nên dùng `DOCKER-USER`
+   (Docker không ghi đè chuỗi này), thêm `INPUT` cho dịch vụ nghe trên host:
    ```bash
+   sudo iptables -I DOCKER-USER -p tcp --dport 80 -j NFQUEUE --queue-num 0 --queue-bypass
    sudo iptables -I INPUT -p tcp --dport 80 -j NFQUEUE --queue-num 0 --queue-bypass
-   sudo iptables -I FORWARD -p tcp --dport 80 -j NFQUEUE --queue-num 0 --queue-bypass
    ```
-3. Đổi `command` của service `suricata` thành `-c /etc/suricata/suricata.yaml -q 0`.
-4. Hoàn tác: chạy lại đúng 2 lệnh iptables trên với `-D` thay `-I`, rồi trả `command` về `-i ${SURICATA_IFACE}`.
+   `--queue-bypass` bắt buộc: Suricata chết thì gói vẫn đi, web không sập.
+   Muốn giữ qua reboot: `iptables-persistent`. GitOps KHÔNG quản lý iptables.
+3. Đặt `SURICATA_ARGS=-q 0` trong `.env` rồi `docker compose up -d suricata`.
+4. Hoàn tác: chạy lại 2 lệnh iptables trên với `-D` thay `-I`, xoá `SURICATA_ARGS`
+   khỏi `.env`, `docker compose up -d suricata`.
+
+Gói bị `drop` khiến client treo đến timeout (không có RST). Test từ máy Windows,
+không test từ VM1 (loopback).
 
 Lưu ý: khi gói bị chặn thì Nginx và Django **không có log** của request đó,
 chỉ còn alert của Suricata. Với Suricata 7+, sự kiện chặn nằm ở
