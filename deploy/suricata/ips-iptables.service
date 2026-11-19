@@ -1,0 +1,18 @@
+# Áp dụng rule NFQUEUE của Suricata IPS lúc boot (sau Docker, vì cần chain DOCKER-USER).
+# Cài (đường dẫn hardcode như gitops-agent.service, sửa nếu repo ở chỗ khác):
+#   sudo cp deploy/suricata/ips-iptables.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now ips-iptables
+# Gỡ IPS: sudo systemctl disable --now ips-iptables  (ExecStop chạy "off")
+[Unit]
+Description=Suricata IPS NFQUEUE iptables rules
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/home/trong/library-app/deploy/suricata/ips-iptables.sh on
+ExecStop=/home/trong/library-app/deploy/suricata/ips-iptables.sh off
+
+[Install]
+WantedBy=multi-user.target
