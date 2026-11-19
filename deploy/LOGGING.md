@@ -227,12 +227,21 @@ chỉnh trong `deploy/suricata/suricata.yaml`.
    (Docker không ghi đè chuỗi này), thêm `INPUT` cho dịch vụ nghe trên host:
    ```bash
    sudo iptables -I DOCKER-USER -p tcp --dport 80 -j NFQUEUE --queue-num 0 --queue-bypass
+   sudo iptables -I DOCKER-USER -p tcp --sport 80 -j NFQUEUE --queue-num 0 --queue-bypass
    sudo iptables -I INPUT -p tcp --dport 80 -j NFQUEUE --queue-num 0 --queue-bypass
    ```
    `--queue-bypass` bắt buộc: Suricata chết thì gói vẫn đi, web không sập.
+   **Phải queue cả 2 chiều (`--dport` và `--sport`).** Chỉ queue chiều tới server thì
+   Suricata không thấy SYN/ACK nên không dựng được phiên HTTP, rule HTTP không khớp và
+   không chặn được gì (đã gặp khi test). Dòng `INPUT` chỉ cho dịch vụ nghe trực tiếp
+   trên host, chưa test cùng chiều `OUTPUT --sport 80`.
    Muốn giữ qua reboot: `iptables-persistent`. GitOps KHÔNG quản lý iptables.
 3. Đặt `SURICATA_ARGS=-q 0` trong `.env` rồi `docker compose up -d suricata`.
-4. Hoàn tác: chạy lại 2 lệnh iptables trên với `-D` thay `-I`, xoá `SURICATA_ARGS`
+   `HOME_NET` trong `suricata.yaml` phải gồm dải Docker `172.16.0.0/12`: tại
+   `DOCKER-USER` gói đã bị DNAT sang IP container nginx.
+   Tắt `gitops-agent.timer` khi test và để VM1 ở nhánh có cấu hình IPS: `reconcile.sh`
+   chạy `git reset --hard origin/main` nên sẽ kéo VM1 về `main` (hardcode `-i`).
+4. Hoàn tác: chạy lại các lệnh iptables trên với `-D` thay `-I`, xoá `SURICATA_ARGS`
    khỏi `.env`, `docker compose up -d suricata`.
 
 Gói bị `drop` khiến client treo đến timeout (không có RST). Test từ máy Windows,
