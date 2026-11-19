@@ -15,7 +15,10 @@ suricata-version: "7.0"
 vars:
   # more specific is better for alert accuracy and performance
   address-groups:
-    HOME_NET: "[192.168.111.0/24]"
+    # 172.16.0.0/12 = dải bridge của Docker. Ở chế độ IPS, gói bắt tại chain
+    # DOCKER-USER đã bị DNAT sang IP container nginx (172.x), không còn là
+    # 192.168.111.136 -> thiếu dải này thì mọi rule "-> $HOME_NET" không khớp.
+    HOME_NET: "[192.168.111.0/24,172.16.0.0/12]"
     #HOME_NET: "[192.168.0.0/16]"
     #HOME_NET: "[10.0.0.0/8]"
     #HOME_NET: "[172.16.0.0/12]"
